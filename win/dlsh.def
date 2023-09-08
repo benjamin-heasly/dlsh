@@ -1,0 +1,15 @@
+EXPORTS
+	dynListSeriesLong
+	dynListPermuteList
+	dynListSortListIndices
+	dynListUniqueList
+	dynListRecodeList
+	dynListCopyElement
+	dynListCopyElementList
+	dynMatrixDims
+	tclFindDynMatrix
+	dynGroupFindList
+	dynListSortList	
+	dynListRecodeWithTiesList
+	dynListCombine
+
