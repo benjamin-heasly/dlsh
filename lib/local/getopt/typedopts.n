@@ -1,0 +1,264 @@
+.\" @(#)typedopts.n 1.0 02/19/94 darkfox
+.TH TYPEDOPTS N "19 February 1994"
+.SH NAME
+typedopts \- parse typed command-line options in TCL
+.SH SYNOPSIS
+.nf
+.ft B
+typedopts arglist optlist optret argret rest [ options ]
+.ft R
+.SH OPTIONS
+.TP
+.B \-noinit
+Don't initialize
+.I optret
+and
+.IR argret .
+.SH DESCRIPTION
+.LP
+.B typedopts
+is a command line option parser.  It reads
+.I arglist
+and finds all the options that are described in
+.IR optlist .
+If no errors are found, then typedopts will set
+.I rest
+to the command line arguments that weren't parsed,
+.I optret
+and
+.I argret
+as described below, and return
+.BR 1 .
+.I optret
+and
+.I argret
+will be set to arrays, indexed by the names of the options in
+.IR optlist .
+.I optret
+will contain boolean values indicating which options were found in
+.IR arglist ,
+and
+.I argret
+will contain the arguments to the options found.
+.LP
+.I optlist
+is a
+.B TCL
+list that describes all of the options that the
+program accepts.  It consists of type-name pairs:
+.nf
+{ type name type name ... }
+.fi
+.I type
+describes what type of argument the
+option may take; the types are described below.  Some of the types
+require additional parameters; for these types,
+.I type
+must be a
+.B TCL
+list with the type name followed by the parameters.
+.LP
+.I name
+is the name of the option; if the program accepts more than
+one option of type
+.IR type ,
+then
+.I name
+may be a
+.B TCL
+list of all the
+options of that type.  The option may be abbreviated on the command
+line, as long as the abbreviation uniquely identifies one option.
+.LP
+The types for
+.I type
+are listed here.  The type name in
+.I type
+may be a unique abbreviation of the type name listed.
+.TP
+.B boolean
+A simple flag; no argument is accepted for the option.
+.TP
+.B string
+A string -- no type checking is done.
+.TP
+.B float
+A floating point number.  All of the TCL floating point formats
+should be accepted for this.
+.TP
+.B integer
+An integer.
+.TP
+.B number
+A floating point number or an integer.
+.TP
+.B "one\-of \fIvalue\fR..."
+One of a specific set of values.  The values may be abbreviated
+when used on the command line.
+.TP
+.B "list\-of \fItype\fR"
+A list of values of type
+.IR type .
+The list ends when one of the following is found:
+A valid command line option, the string
+.RB `` \-\- '',
+or the end of
+.IR arglist .
+.TP
+.B "multiple \fItype\fR"
+This option takes one argument of type
+.IR type ,
+but may appear more than once on the command line.
+If an option is not specified as being of type
+.B multiple
+then it may appear on the command line only once.
+.LP
+If an option is of type
+.B list-of
+or
+.BR multiple ,
+then the value found for that option in
+.I argret
+will be a
+.B TCL 
+list of all the values found for the option, in the order that they
+appeared on the command line.
+.LP
+If
+.B typedopts
+finds an option that is not described in
+.IR optlist ,
+or if it finds an option argument of the wrong type, it will set
+.IR argret (\fB_ERROR_\fR)
+to an error message, set
+.I rest
+to the rest of the options and arguments, and return 
+.BR 0 .
+.LP
+If the
+.B \-noinit
+option is given to
+.BR typedopts ,
+then the
+.I optret
+and
+.I argret
+arrays will 
+.I not
+be initialized.  This allows the program to call
+.B typedopts
+several times with different 
+.IR arglist s
+without losing the information from previous calls.
+.LP
+If
+.B typedopts
+can't parse its options for any reason, it will print an
+error message to stderr and return a
+.B -1
+without modifying any other variables.
+.SH EXAMPLE:
+.LP
+The command line parser for a simple text formatter is given below.
+The formatter accepts the options
+.BR \-top ,
+.BR \-bottom ,
+.BR \-left ,
+.BR \-right ,
+and
+.B \-paragraph
+to set the margins,
+.B -header
+to set the header string,
+.B -pagenum
+to set the page number, and
+.B -position
+to position the page number in the footer (the position can be
+.BR left ,
+.BR right ,
+or
+.BR center ).
+It first parses arguments from the environment variable
+.BR TFORMAT ,
+then from the command line.  The command line can have options and
+filenames intermixed; the options affect all files found after the
+option.
+.LP
+.nf
+proc parseOpts { } {
+
+# global variables needed:  env = environ variables array,
+#                           argv == command line args
+  global env argv
+
+# The options list: (they have to be declared multiple, because we
+# aren't re-initializing the option arrays each time.
+  set optlist {
+    { multiple integer } { left right top bottom paragraph pagenum }
+    { multiple string } header
+    { multiple one-of left right center } position
+  }
+
+# check if we have a $TFORMAT environment variable to parse
+  if { [ lsearch -exact [ array names $env ] "TFORMAT" ] > -1 } then {
+
+# initialize the options arrays found() and values() with the values
+# from TFORMAT
+    set list $env(TFORMAT)
+    while { ! [ typedopts $list $opts found values list ] } {
+
+# error returned from typedopts:  print the error message and
+# continue parsing
+      puts stderr "Parsing \\$TFORMAT: $values(_ERROR_)"
+    }
+
+# check if there are any arguments left; if so, give a warning.
+  if { [ llength $list ] } then {
+    puts stderr "Warning:  \\$TFORMAT has non-option arguments!"
+  }
+
+  } else {
+
+# initialize options arrays found() and values() from an empty list
+    typedopts { } $opts found values
+  }
+
+# start parsing the command line.  As long as its not empty, we first
+# pass pass it through the option parser, then call the formatter on
+# the files.
+  while { [ llength $argv ] } {
+    while { ! [ typedopts $argv $opts found values argv -noinit ] } {
+      puts stderr "$values(_ERROR_)"
+    }
+    format [ lindex $argv 0 ]
+    set argv [ lrange $argv 1 end ]
+  }
+}
+.fi
+.SH SEE ALSO
+.BR getopt (3)
+.SH AUTHOR
+Johnson Earls:
+.BR darkfox@netcom.com .
+.SH BUGS
+.LP
+If an option has both
+.B multiple
+and
+.B list\-of
+in its type, the
+.B muiltiple
+part will only be effective if it comes first, e.g.
+.nf
+{ multiple list-of string }
+.fi
+but not
+.nf
+{ list-of multiple string }
+.fi
+.LP
+Setting an option to type
+.nf
+{ multiple boolean }
+.fi
+will cause an infinite loop if the option occurs before non-option arguments.
