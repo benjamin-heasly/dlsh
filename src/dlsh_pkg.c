@@ -24,9 +24,8 @@ extern int Df_Init(Tcl_Interp * interp) ;
 extern int Dlg_Init(Tcl_Interp * interp) ;
 extern int Cgps_Init(Tcl_Interp * interp) ;
 extern int Cgbase_Init(Tcl_Interp * interp) ;
-extern int Cg_mswin_Init(Tcl_Interp *interp);
 
-EXPORT(int,Dlsh_Init) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Dlsh_Init) (Tcl_Interp *interp)
 {
   if (Dl_Init(interp) == TCL_ERROR) return(TCL_ERROR);
   if (Dlg_Init(interp) == TCL_ERROR) return(TCL_ERROR);
@@ -39,17 +38,17 @@ EXPORT(int,Dlsh_Init) _ANSI_ARGS_((Tcl_Interp *interp))
   return TCL_OK;
 }
 
-EXPORT(int,Dlsh_SafeInit) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Dlsh_SafeInit) (Tcl_Interp *interp)
 {
   return Dlsh_Init(interp);
 }
 
-EXPORT(int,Dlsh_Unload) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Dlsh_Unload) (Tcl_Interp *interp)
 {
   return TCL_OK;
 }
 
-EXPORT(int,Dlsh_SafeUnload) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Dlsh_SafeUnload) (Tcl_Interp *interp)
 {
   return TCL_OK;
 }

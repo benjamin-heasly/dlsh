@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
+
 #if defined(SGI)
 #include <ieeefp.h>
 #endif
@@ -92,27 +94,6 @@ double lgamma(double xx)
 #if defined(__QNX__) || defined(WIN32)
 #define isnan(x) (0)
 #endif
-
-struct MathFunc1 Math1Table[] = {
-  { "ABS",    (MATH_FUNC1) fabs },
-  { "ACOS",   (MATH_FUNC1) acos },
-  { "ASIN",   (MATH_FUNC1) asin },
-  { "ATAN",   (MATH_FUNC1) atan },
-  { "CEIL",   (MATH_FUNC1) ceil },
-  { "COS",    (MATH_FUNC1) cos },
-  { "COSH",   (MATH_FUNC1) cosh },
-  { "EXP",    (MATH_FUNC1) exp },
-  { "FLOOR",  (MATH_FUNC1) floor },
-  { "LOG",    (MATH_FUNC1) log },
-  { "LOG10",  (MATH_FUNC1) log10 },
-  { "ROUND",  (MATH_FUNC1) round },
-  { "SIN",    (MATH_FUNC1) sin },
-  { "SINH",   (MATH_FUNC1) sinh },
-  { "SQRT",   (MATH_FUNC1) sqrt },
-  { "TAN",    (MATH_FUNC1) tan },
-  { "TANH",   (MATH_FUNC1) tanh },
-  { "LGAMMA", (MATH_FUNC1) lgamma },
-};
 
 
 /*
@@ -3364,6 +3345,29 @@ DYN_LIST *dynListMathOneArg(DYN_LIST *dl, int func_id)
   DYN_LIST *list;
   MATH_FUNC1 func;
 
+
+  struct MathFunc1 Math1Table[] = {
+    { "ABS",    (MATH_FUNC1) fabs },
+    { "ACOS",   (MATH_FUNC1) acos },
+    { "ASIN",   (MATH_FUNC1) asin },
+    { "ATAN",   (MATH_FUNC1) atan },
+    { "CEIL",   (MATH_FUNC1) ceil },
+    { "COS",    (MATH_FUNC1) cos },
+    { "COSH",   (MATH_FUNC1) cosh },
+    { "EXP",    (MATH_FUNC1) exp },
+    { "FLOOR",  (MATH_FUNC1) floor },
+    { "LOG",    (MATH_FUNC1) log },
+    { "LOG10",  (MATH_FUNC1) log10 },
+    { "ROUND",  (MATH_FUNC1) round },
+    { "SIN",    (MATH_FUNC1) sin },
+    { "SINH",   (MATH_FUNC1) sinh },
+    { "SQRT",   (MATH_FUNC1) sqrt },
+    { "TAN",    (MATH_FUNC1) tan },
+    { "TANH",   (MATH_FUNC1) tanh },
+    { "LGAMMA", (MATH_FUNC1) lgamma },
+  };
+  
+  
   if (func_id >= DL_N_MATHFUNC1) {
     return NULL;
   }
@@ -3422,11 +3426,15 @@ DYN_LIST *dynListMathOneArg(DYN_LIST *dl, int func_id)
 	}
       default:
 	{
-	  float *newvals = (float *) calloc(DYN_LIST_N(dl), sizeof(float));
-	  for (i = 0; i < DYN_LIST_N(dl); i++) {
-	    newvals[i] = (*func)((double)vals[i]);
+	  size_t num_elements = DYN_LIST_N(dl);
+	  if (num_elements <= SIZE_MAX/sizeof(long)) {
+	    float *newvals = (float *) calloc(num_elements, sizeof(float));
+	    for (i = 0; i < DYN_LIST_N(dl); i++) {
+	      newvals[i] = (*func)((double)vals[i]);
+	    }
+	    list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
 	  }
-	  list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
+	  else list = NULL;
 	  break;
 	}
       }
@@ -3478,11 +3486,16 @@ DYN_LIST *dynListMathOneArg(DYN_LIST *dl, int func_id)
 	}
       default:
 	{
-	  float *newvals = (float *) calloc(DYN_LIST_N(dl), sizeof(float));
-	  for (i = 0; i < DYN_LIST_N(dl); i++) {
-	    newvals[i] = (*func)((double)vals[i]);
+	  size_t num_elements = DYN_LIST_N(dl);
+	  if (num_elements <= SIZE_MAX/sizeof(long)) {
+	    float *newvals = (float *) calloc(num_elements, sizeof(float));
+	    for (i = 0; i < DYN_LIST_N(dl); i++) {
+	      newvals[i] = (*func)((double)vals[i]);
+	    }
+	    list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
 	  }
-	  list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
+	  else
+	    list = NULL;
 	  break;
 	}
       }
@@ -3524,11 +3537,19 @@ DYN_LIST *dynListMathOneArg(DYN_LIST *dl, int func_id)
 	}
       default:
 	{
-	  float *newvals = (float *) calloc(DYN_LIST_N(dl), sizeof(float));
-	  for (i = 0; i < DYN_LIST_N(dl); i++) {
-	    newvals[i] = (*func)((double)vals[i]);
+	  size_t num_elements = DYN_LIST_N(dl);
+	  if (num_elements <= SIZE_MAX/sizeof(long)) {
+	    float *newvals = (float *) calloc(num_elements, sizeof(float));
+	    if (newvals) {
+	      for (i = 0; i < DYN_LIST_N(dl); i++) {
+		newvals[i] = (*func)((double)vals[i]);
+	      }
+	      list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
+	    }
+	    else list = NULL;
 	  }
-	  list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
+	  else
+	    list = NULL;
 	  break;
 	}
       }
@@ -3577,11 +3598,16 @@ DYN_LIST *dynListMathOneArg(DYN_LIST *dl, int func_id)
 	}
       default:
 	{
-	  float *newvals = (float *) calloc(DYN_LIST_N(dl), sizeof(float));
-	  for (i = 0; i < DYN_LIST_N(dl); i++) {
-	    newvals[i] = (*func)((double)vals[i]);
+	  size_t num_elements = DYN_LIST_N(dl);
+	  if (num_elements <= SIZE_MAX/sizeof(long)) {
+	    float *newvals = (float *) calloc(DYN_LIST_N(dl),
+					      sizeof(float));
+	    for (i = 0; i < DYN_LIST_N(dl); i++) {
+	      newvals[i] = (*func)((double)vals[i]);
+	    }
+	    list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
 	  }
-	  list = dfuCreateDynListWithVals(DF_FLOAT, DYN_LIST_N(dl), newvals);
+	  else list = NULL;
 	  break;
 	}
       }

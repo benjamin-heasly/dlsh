@@ -131,7 +131,8 @@ int Dm_Init(Tcl_Interp *interp)
   int i = 0;
 
   while (DMcommands[i].name) {
-    Tcl_CreateCommand(interp, DMcommands[i].name, DMcommands[i].func, 
+    Tcl_CreateCommand(interp, DMcommands[i].name,
+		      (Tcl_CmdProc *) DMcommands[i].func, 
 		      (ClientData) DMcommands[i].cd, 
 		      (Tcl_CmdDeleteProc *) NULL);
     i++;
@@ -183,7 +184,7 @@ static int tclDynMatrixGenerate (ClientData cd, Tcl_Interp *interp,
 {
   DYN_LIST *m = NULL;
   int nrows, ncols;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
   
   switch (operation) {
   case DM_IDENTITY:
@@ -253,7 +254,7 @@ static int tclDynMatrixDump (ClientData cd, Tcl_Interp *interp,
   DYN_LIST *m;
   Tcl_Channel outChannel = NULL ;
   int separator = '\t';
-  int output_format = (int) cd;
+  int output_format = (Tcl_Size) cd;
   int status = 0;
 
   if (argc < 2) {
@@ -329,7 +330,12 @@ static int tclDynMatrixDims (ClientData cd, Tcl_Interp *interp,
     return TCL_ERROR;
 
   if (!dynMatrixDims(m, &rows, &cols)) return TCL_ERROR;
-  sprintf(interp->result, "%d %d", rows, cols);
+
+  Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(rows));
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(cols));
+  Tcl_SetObjResult(interp, listPtr);
+
   return TCL_OK;
 }
 
@@ -355,7 +361,7 @@ static int tclDynMatrixFromMatrix (ClientData cd, Tcl_Interp *interp,
 				  int argc, char *argv[])
 {
   DYN_LIST *m, *newmat = NULL;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " matrix", 
@@ -509,8 +515,11 @@ static int tclDynMatrixReshape (ClientData cd, Tcl_Interp *interp,
   }
   
   if ((ncols * nrows) != total_elements) {
-    sprintf(interp->result,"%s: cannot create a %dx%d matrix from %d elements",
-	    argv[0], nrows, ncols, total_elements);
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	     "%s: cannot create a %dx%d matrix from %d elements",
+	     argv[0], nrows, ncols, total_elements);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
   
@@ -538,7 +547,7 @@ static int tclDynMatrixArith (ClientData cd, Tcl_Interp *interp,
 {
   DYN_LIST *m, *l, *newmat = NULL;
   double k;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
 
   if (argc < 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " matrix [matrix|vec|float]", 
@@ -639,7 +648,7 @@ static int tclDynMatrixSums (ClientData cd, Tcl_Interp *interp,
 {
   DYN_LIST *newlist = NULL;
   DYN_LIST *m;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " matrix", 
@@ -685,7 +694,7 @@ static int tclDynMatrixMeans (ClientData cd, Tcl_Interp *interp,
 {
   DYN_LIST *newlist = NULL;
   DYN_LIST *m;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " matrix", 
@@ -731,7 +740,7 @@ static int tclDynMatrixCenter (ClientData cd, Tcl_Interp *interp,
   DYN_LIST *newlist = NULL;
   DYN_LIST *m, *v = NULL;
   int nrows, ncols;
-  int operation = (int) cd;
+  int operation = (Tcl_Size) cd;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " matrix [vec]", 

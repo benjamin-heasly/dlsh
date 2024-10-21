@@ -115,7 +115,8 @@ int Df_Init(Tcl_Interp *interp)
   int i = 0;
 
   while (DFcommands[i].name) {
-    Tcl_CreateCommand(interp, DFcommands[i].name, DFcommands[i].func, 
+    Tcl_CreateCommand(interp, DFcommands[i].name,
+		      (Tcl_CmdProc *) DFcommands[i].func, 
 		      (ClientData) DFcommands[i].cd, 
 		      (Tcl_CmdDeleteProc *) NULL);
     i++;
@@ -180,41 +181,51 @@ static int tclOpenDataFile (ClientData data, Tcl_Interp *interp,
   static char filebase[255];
   
   if (argc != 2) {
-    interp->result = "usage: df_open filename";
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("usage: df_open filename", -1));
     return TCL_ERROR;
   }
 
   file_basename(filebase, argv[1]);
 
   if ((entryPtr = Tcl_FindHashEntry(&dfTable, filebase))) {
-    sprintf(interp->result,"df_open: dffile %s already open", filebase);
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	     "df_open: dffile %s already open", filebase);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
 
   if (!(df = dfuCreateDataFile())) {
-    sprintf(interp->result,"df_open: error creating new df structure");
+    Tcl_SetObjResult(interp,
+		     Tcl_NewStringObj("df_open: error creating new df structure", -1));
     return TCL_ERROR;
   }
 
   if ((fp = fopen (argv[1], "rb")) == NULL) {
-    sprintf(interp->result,"df_open: file %s not found", argv[1]);
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	    "df_open: file %s not found", argv[1]);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
 
   if (!dfuFileToStruct(fp, df)) {
-    sprintf(interp->result,"df_open: file %s not recognized as df format", 
-	    argv[1]);
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	     "df_open: file %s not recognized as df format", 
+	     argv[1]);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
   fclose(fp);
-
+  
   /*
    * Add to hash table which contains list of open df's
    */
   entryPtr = Tcl_CreateHashEntry(&dfTable, filebase, &newentry);
   Tcl_SetHashValue(entryPtr, df);
-
-  Tcl_SetResult(interp, filebase, TCL_STATIC);
+  
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(filebase, -1));
   return TCL_OK;
 }
 
@@ -242,16 +253,17 @@ static int tclDataFileOpen (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
 
   if (argc != 2) {
-    interp->result = "usage: df_loaded dfhandle";
+    Tcl_SetObjResult(interp,
+		     Tcl_NewStringObj("usage: df_loaded dfhandle", -1));
     return TCL_ERROR;
   }
 
   file_basename(filebase, argv[1]);
   if ((entryPtr = Tcl_FindHashEntry(&dfTable, argv[1])) ||
       (entryPtr = Tcl_FindHashEntry(&dfTable, filebase))) {
-    interp->result = "1";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(1));
   }
-  else interp->result = "0";
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
   return TCL_OK;
 }
 
@@ -279,7 +291,7 @@ static int tclCloseDataFile (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
 
   if (argc != 2) {
-    interp->result = "usage: df_close dfhandle";
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("usage: df_close dfhandle", -1));
     return TCL_ERROR;
   }
 
@@ -340,7 +352,8 @@ static int tclWriteDataFile (ClientData data, Tcl_Interp *interp,
   int format = DF_ASCII;
 
   if (argc < 2) {
-    interp->result = "usage: df_write dfhandle [[ascii|binary] filename]";
+    Tcl_SetObjResult(interp,
+		     Tcl_NewStringObj("usage: df_write dfhandle [[ascii|binary] filename]", -1));
     return TCL_ERROR;
   }
 
@@ -458,7 +471,8 @@ static int tclGetDataFile (ClientData data, Tcl_Interp *interp,
    */
 
   else if (argc < 2) {
-    interp->result = "usage: df_get dfhandle[:obsp] ...";
+    Tcl_SetObjResult(interp,
+		     Tcl_NewStringObj("usage: df_get dfhandle[:obsp] ...", -1));
     return TCL_ERROR;
   }
 
@@ -521,19 +535,19 @@ static int tclGetDF(DATA_FILE *df, Tcl_Interp *interp, int argc, char *argv[])
 
   /* ints */
   else if (!strncasecmp(argv[1], "TIM", 3))
-    sprintf(interp->result, "%ld", DF_TIME(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_TIME(DF_DFINFO(df))));
   else if (!strncasecmp(argv[1], "FILENU", 6))
-    sprintf(interp->result, "%d", DF_FILENUM(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_FILENUM(DF_DFINFO(df))));
   else if (!strncasecmp(argv[1], "EXP", 3))
-    sprintf(interp->result, "%d", DF_EXPERIMENT(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_EXPERIMENT(DF_DFINFO(df))));
   else if (!strncasecmp(argv[1], "TES", 3))
-    sprintf(interp->result, "%d", DF_TESTMODE(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_TESTMODE(DF_DFINFO(df))));
   else if (!strncasecmp(argv[1], "NST", 3))
-    sprintf(interp->result, "%d", DF_NSTIMTYPES(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_NSTIMTYPES(DF_DFINFO(df))));
   else if (!strncasecmp(argv[1], "NOB", 3))
-    sprintf(interp->result, "%d", DF_NOBSP(df));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_NOBSP(df)));
   else if (!strncasecmp(argv[1], "NAUX", 4))
-    sprintf(interp->result, "%d", DF_NAUXFILES(DF_DFINFO(df)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(DF_NAUXFILES(DF_DFINFO(df))));
 
   /* mismatch */
   else {
@@ -569,26 +583,26 @@ static int tclGetObs(DATA_FILE *df, Tcl_Interp *interp, int argc, char *argv[])
   
   o = DF_OBSP(df, index);
   if (!o) {
-    Tcl_SetResult(interp, "df_get: bad obsp pointer", TCL_STATIC);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("df_get: bad obsp pointer", -1));
     return TCL_ERROR;
   }
 
   /* ints */
   if (!strncasecmp(argv[2], "FIL", 3))
-    sprintf(interp->result, "%d", OBS_FILENUM(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_FILENUM(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "IND", 3))
-    sprintf(interp->result, "%d", OBS_INDEX(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_INDEX(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "BLO", 3))
-    sprintf(interp->result, "%d", OBS_BLOCK(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_BLOCK(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "OBS", 3))
-    sprintf(interp->result, "%d", OBS_OBSP(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_OBSP(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "DUR", 3))
-    sprintf(interp->result, "%d", OBS_DURATION(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_DURATION(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "NTR", 3))
-    sprintf(interp->result, "%d", OBS_NTRIALS(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_NTRIALS(OBSP_INFO(o))));
   else if (!strncasecmp(argv[2], "STA", 3) ||
 	   !strncasecmp(argv[2], "EOT", 3)) {
-    sprintf(interp->result, "%d", OBS_STATUS(OBSP_INFO(o)));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(OBS_STATUS(OBSP_INFO(o))));
   }
 
   /* mismatch */
@@ -630,9 +644,7 @@ static int tclObsGetDataFile (ClientData data, Tcl_Interp *interp,
   DATA_FILE *df;
   Tcl_HashEntry *entryPtr;
   char filebase[255], *colon;
-  int operation = (int) data;
-
-
+  int operation = (Tcl_Size) data;
 
   /*
    * This allows calls of the form "df_??get dfhandle:1 ..." as a shorthand
@@ -845,12 +857,14 @@ static int tclEvGetObs(DATA_FILE *df, int mode,
   if (!strncasecmp(argv[2], "TimeWithData", 12)) {
     int tag, result, data, time, evdata[5];
     if (argc < 5) {
-      interp->result = "df_evget [TimeWithData]: no data specified";
+      Tcl_SetObjResult(interp,
+		       Tcl_NewStringObj("df_evget [TimeWithData]: no data specified", -1));
       return TCL_ERROR;
     }
     if (!(evGetTagID(argv[3],&tag))) goto BadTag;
     if (Tcl_GetInt(interp, argv[4], &data) != TCL_OK) {
-      interp->result = "df_evget [TimeWithData]: bad data specified";
+      Tcl_SetObjResult(interp,
+		       Tcl_NewStringObj("df_evget [TimeWithData]: bad data specified", -1));;
       return TCL_ERROR;
     }
     if ((result = evGetTimeWithData(o, tag, data, evdata, &time))) {
@@ -931,12 +945,13 @@ static int tclEvGetObs(DATA_FILE *df, int mode,
   if (!strcasecmp(argv[2], "DataAtTime")) {
     int tag, result = 0, time, evdata[5];
     if (argc < 5) {
-      interp->result = "df_evget [DataAtTime]: must specify data and time";
+      Tcl_SetObjResult(interp, Tcl_NewStringObj("df_evget [DataAtTime]: must specify data and time", -1));
       return TCL_ERROR;
     }
     if (!(evGetTagID(argv[3],&tag))) goto BadTag;
     if (Tcl_GetInt(interp, argv[4], &time) != TCL_OK) {
-      interp->result = "df_evget [DataAtTime]: bad time specified";
+      Tcl_SetObjResult(interp,
+		       Tcl_NewStringObj("df_evget [DataAtTime]: bad time specified", -1));
       return TCL_ERROR;
     }
     if ((result = evGetDataAtTime(o, tag, time, evdata))) {
@@ -1116,7 +1131,7 @@ static int tclEvGetObs(DATA_FILE *df, int mode,
   }
 
  BadTag:
-  interp->result = "df_evget: bad tag specified";
+  Tcl_SetObjResult(interp, Tcl_NewStringObj("df_evget: bad tag specified", -1));
   return TCL_ERROR;
 }
 
@@ -1218,25 +1233,40 @@ static int tclEmGetObs(DATA_FILE *df, int mode,
       return TCL_ERROR;
     }
     else {
-      sprintf(interp->result, "%7.5f %7.5f", hmean, vmean);
+      Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+      Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(hmean));
+      Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(vmean));
+      Tcl_SetObjResult(interp, listPtr);
       return TCL_OK;
     }
   }
 
   if (argc == 3 && !strncasecmp(argv[2],"WINS",4)) {
     float scale = EM_PNT_DEG(OBSP_EMDATA(o))*2.0;
-    sprintf(interp->result, "%6.3f %6.3f", 
-	    (EM_WINDOW(OBSP_EMDATA(o))[2]-EM_WINDOW(OBSP_EMDATA(o))[0])/scale,
-	    (EM_WINDOW(OBSP_EMDATA(o))[3]-EM_WINDOW(OBSP_EMDATA(o))[1])/scale);
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewDoubleObj((EM_WINDOW(OBSP_EMDATA(o))[2]-
+					       EM_WINDOW(OBSP_EMDATA(o))[0])/
+					      scale));
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewDoubleObj((EM_WINDOW(OBSP_EMDATA(o))[3]-
+					       EM_WINDOW(OBSP_EMDATA(o))[1])/
+					      scale));
+    Tcl_SetObjResult(interp, listPtr);
     return TCL_OK;
   }
 
   if (argc == 3 && !strncasecmp(argv[2],"WIND",4)) {
-    sprintf(interp->result, "%d %d %d %d", 
-	    EM_WINDOW(OBSP_EMDATA(o))[0],
-	    EM_WINDOW(OBSP_EMDATA(o))[1],
-	    EM_WINDOW(OBSP_EMDATA(o))[2],
-	    EM_WINDOW(OBSP_EMDATA(o))[3]);
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewIntObj(EM_WINDOW(OBSP_EMDATA(o))[0]));
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewIntObj(EM_WINDOW(OBSP_EMDATA(o))[1]));
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewIntObj(EM_WINDOW(OBSP_EMDATA(o))[2]));
+    Tcl_ListObjAppendElement(interp, listPtr,
+			     Tcl_NewIntObj(EM_WINDOW(OBSP_EMDATA(o))[3]));
+    Tcl_SetObjResult(interp, listPtr);
     return TCL_OK;
   }
 
@@ -1250,7 +1280,10 @@ static int tclEmGetObs(DATA_FILE *df, int mode,
       return TCL_ERROR;
     }
     else {
-      sprintf(interp->result, "%7.5f %7.5f", hmean, vmean);
+      Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+      Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(hmean));
+      Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(vmean));
+      Tcl_SetObjResult(interp, listPtr);
       return TCL_OK;
     }
   }
@@ -1262,14 +1295,14 @@ static int tclEmGetObs(DATA_FILE *df, int mode,
   }
   if (Tcl_GetInt(interp, argv[2], &start) != TCL_OK) return TCL_ERROR;
   if (Tcl_GetInt(interp, argv[3], &stop) != TCL_OK)  return TCL_ERROR;
-
+  
   if (argc > 5) {
     if (Tcl_GetInt(interp, argv[4], &fixstart) != TCL_OK) return TCL_ERROR;
     if (Tcl_GetInt(interp, argv[5], &fixstop) != TCL_OK)  return TCL_ERROR;
     fixstartp = &fixstart;
     fixstopp = &fixstop;
   }
-
+  
   switch (mode) {
   case GET_EM:     mode = EM_ALL;      break;
   case GET_EM_H:   mode = EM_HORIZ;    break;
@@ -1314,7 +1347,7 @@ static int tclSetDataFile (ClientData data, Tcl_Interp *interp,
     "TAGS = { FILENAME, FILENUM, COMMENT, EXP, TESTMODE, NSTIMTYPES }\n";
 
   if (argc < 4) {
-    interp->result = usage_message;
+    Tcl_SetResult(interp, usage_message, TCL_STATIC);
     return TCL_ERROR;
   }
 

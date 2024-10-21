@@ -27,7 +27,7 @@ extern void Sig_Setup(Tcl_Interp *interp);
 
 typedef int (*TCL_FUNCTION)(ClientData, Tcl_Interp *, int, char **);
 typedef int (*TCL_OBJ_FUNCTION)(ClientData, Tcl_Interp *, int,
-	Tcl_Obj * CONST objv[]);
+	Tcl_Obj * const objv[]);
 
 typedef struct {
   char *name;

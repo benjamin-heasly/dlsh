@@ -18,6 +18,30 @@
 #define DLLEXP
 #endif
 
+typedef struct _dlshinfo {
+  /*
+   * Local tables for holding dynGroups and dynLists
+   */
+  Tcl_HashTable dlTable;	/* stores dynLists  */
+  Tcl_HashTable dgTable;	/* stores dynGroups */
+
+  /*
+   * amounts to grow by dynamically
+   */
+  int DefaultListIncrement;
+  int DefaultGroupIncrement;
+  
+  /*
+   * variables used to manage groups and lists
+   */
+  int dgCount;		/* increasing count of dynGroups */
+  int dlCount;	        /* increasing count of dynLists  */
+  int localCount;       /* for naming local variables    */
+  int returnCount;      /* for naming returned lists     */
+
+} DLSHINFO;
+
+#define DLSH_ASSOC_DATA_KEY "dlsh"
 
 #ifdef __cplusplus
 extern "C" {

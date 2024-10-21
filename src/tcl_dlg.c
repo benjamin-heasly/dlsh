@@ -1524,7 +1524,7 @@ static int tclLineDynList (ClientData data, Tcl_Interp *interp,
   LINE_INFO linfo;
   int lstyle, lwidth, filled, linecolor, fillcolor, sideways, clip;
   int status;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int i, j, skip = 1, boxfilter = -1, closed = 0;
   double val;
   
@@ -3338,7 +3338,7 @@ static int tclPostscriptDynList (ClientData data, Tcl_Interp *interp,
     setlwidth(oldwidth);
   }
 
-  sprintf(interp->result, "%.3f", height); /* return the height */
+  Tcl_SetObjResult(interp, Tcl_NewDoubleObj(height));
 
   return TCL_OK;
 }
@@ -3563,7 +3563,11 @@ static int tclImagePlace (ClientData data, Tcl_Interp *interp,
     setlwidth(oldwidth);
   }
 
-  sprintf(interp->result, "%d %.4f %.4f", ref, width, height);
+  Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(ref));
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(width));
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(height));
+  Tcl_SetObjResult(interp, listPtr);
 
   return TCL_OK;
 }
@@ -3689,7 +3693,7 @@ static int getPSBB(Tcl_Interp *interp, char *filename,
 static int tclLabels (ClientData data, Tcl_Interp *interp,
 		      int argc, char *argv[])
 {
-  int loose = (int) data;
+  int loose = (Tcl_Size) data;
   double min, max, t;
   int nticks = 5;
   int reverse = 0;
@@ -3810,7 +3814,7 @@ static int tclNiceNum (ClientData data, Tcl_Interp *interp,
   if (Tcl_GetInt(interp, argv[2], &round) != TCL_OK) return TCL_ERROR;
 
   retval = nicenum(x, round);
-  sprintf(interp->result, "%f", retval);
+  Tcl_SetObjResult(interp, Tcl_NewDoubleObj(retval));
   return TCL_OK;
 }
 
@@ -3893,7 +3897,7 @@ static int tclNiceDpoints (ClientData data, Tcl_Interp *interp,
       }
     }
   }
-  sprintf(interp->result, "%d", dpoints);
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(dpoints));
   return TCL_OK;
 }
 
@@ -4480,7 +4484,7 @@ static void polarLUV_to_LUV(double l, double c, double h,
 static int tclRGBColors (ClientData data, Tcl_Interp *interp,
 			   int argc, char *argv[])
 {
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int copy_r = 0, copy_g = 0, copy_b = 0;
   DYN_LIST *r_list, *g_list, *b_list;
   int *r_vals, *g_vals, *b_vals;
@@ -4498,7 +4502,7 @@ static int tclRGBColors (ClientData data, Tcl_Interp *interp,
     if (Tcl_GetInt(interp, argv[2], &g) != TCL_OK) return TCL_ERROR;
     if (Tcl_GetInt(interp, argv[3], &b) != TCL_OK) return TCL_ERROR;
 
-    sprintf(interp->result, "%d", (r << 21) + (g << 13) + (b << 5));
+    Tcl_SetObjResult(interp, Tcl_NewIntObj((r << 21) + (g << 13) + (b << 5)));
     return TCL_OK;
   }
 
@@ -4594,7 +4598,7 @@ static int tclRGBColors (ClientData data, Tcl_Interp *interp,
 static int tclRGB2Hex (ClientData data, Tcl_Interp *interp,
 		       int argc, char *argv[])
 {
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int copy_r = 0, copy_g = 0, copy_b = 0;
   DYN_LIST *r_list, *g_list, *b_list;
   int *r_vals, *g_vals, *b_vals;
@@ -4608,7 +4612,9 @@ static int tclRGB2Hex (ClientData data, Tcl_Interp *interp,
     if (Tcl_GetInt(interp, argv[1], &r) == TCL_OK &&
 	Tcl_GetInt(interp, argv[2], &g) == TCL_OK &&
 	Tcl_GetInt(interp, argv[3], &b) == TCL_OK) {
-      sprintf(interp->result, "#%02x%02x%02x", r, g, b);
+      char buf[32];
+      snprintf(buf, sizeof(buf), "#%02x%02x%02x", r, g, b);
+      Tcl_SetObjResult(interp, Tcl_NewStringObj(buf, -1));
       return TCL_OK;
     }
     else {
@@ -4737,7 +4743,7 @@ static void LCH_to_RGB(double L, double C, double H,
 static int tclPolarLAB2RGBColors (ClientData data, Tcl_Interp *interp,
 				  int argc, char *argv[])
 {
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int copy_L = 0, copy_C = 0, copy_H = 0;
   DYN_LIST *L_list, *C_list, *H_list;
   float *L_vals, *C_vals, *H_vals;
@@ -4757,7 +4763,13 @@ static int tclPolarLAB2RGBColors (ClientData data, Tcl_Interp *interp,
     if (Tcl_GetDouble(interp, argv[3], &H) != TCL_OK) return TCL_ERROR;
 
     LCH_to_RGB(L, C, H, &r, &g, &b);
-    sprintf(interp->result, "%d %d %d", r, g, b);
+
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+    Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(r));
+    Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(g));
+    Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(b));
+    Tcl_SetObjResult(interp, listPtr);
+
     return TCL_OK;
   }
 

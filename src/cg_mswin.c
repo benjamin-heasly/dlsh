@@ -625,7 +625,7 @@ void dl_win_resize(int w, int h)
 }
 
 
-int tclWinCreate(ClientData clientData, Tcl_Interp * interp, int argc,
+static int tclWinCreate(ClientData clientData, Tcl_Interp * interp, int argc,
 		 char * argv[])
 {
   int width = 640, height = 480;
@@ -652,7 +652,7 @@ int tclWinCreate(ClientData clientData, Tcl_Interp * interp, int argc,
 }
 
 
-int tclWinDelete(ClientData clientData, Tcl_Interp * interp, int argc,
+static int tclWinDelete(ClientData clientData, Tcl_Interp * interp, int argc,
 		 char * argv[])
 {
   DPC *inst;
@@ -675,7 +675,7 @@ int tclWinDelete(ClientData clientData, Tcl_Interp * interp, int argc,
 }
 
 
-int tclWinSelect(ClientData clientData, Tcl_Interp * interp, int argc,
+static int tclWinSelect(ClientData clientData, Tcl_Interp * interp, int argc,
 		 char * argv[])
 {
   DPC *inst;
@@ -698,7 +698,7 @@ int tclWinSelect(ClientData clientData, Tcl_Interp * interp, int argc,
 }
 
 
-int tclWinResize(ClientData clientData, Tcl_Interp * interp, int argc,
+static int tclWinResize(ClientData clientData, Tcl_Interp * interp, int argc,
 		 char * argv[])
 {
   int w, h ;
@@ -714,7 +714,7 @@ int tclWinResize(ClientData clientData, Tcl_Interp * interp, int argc,
   return(TCL_OK) ;
 }
 
-int tclFlushWin(ClientData clientData, Tcl_Interp * interp, int argc,
+static int tclFlushWin(ClientData clientData, Tcl_Interp * interp, int argc,
 		char * argv[])
 {
   return(TCL_OK) ;
@@ -726,6 +726,16 @@ extern _declspec(dllexport) int Cg_mswin_Init(Tcl_Interp *interp)
 int Cg_mswin_Init(Tcl_Interp * interp)
 #endif
 {
+  if (
+#ifdef USE_TCL_STUBS
+      Tcl_InitStubs(interp, "8.5-", 0)
+#else
+      Tcl_PkgRequire(interp, "Tcl", "8.5-", 0)
+#endif
+      == NULL) {
+    return TCL_ERROR;
+  }
+
   Tcl_CreateCommand(interp, "flushwin", tclFlushWin, (ClientData) NULL,
 		    (Tcl_CmdDeleteProc *) NULL) ;
   Tcl_CreateCommand(interp, "createwin", tclWinCreate, (ClientData) NULL,
