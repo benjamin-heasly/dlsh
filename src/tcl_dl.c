@@ -36,7 +36,8 @@
 #include <dynio.h>
 #include "dfana.h"
 #include <labtcl.h>
-#include <tcl_dl.h>
+#include "tcl_dl.h"
+#include <jansson.h>
 
 #ifdef WIN32
 #define ZLIB_DLL
@@ -46,16 +47,9 @@
 
 #include <utilc.h>
 
-
-static const int DefaultListIncrement = 15;
-static const int DefaultGroupIncrement = 15;
-
-/*
- * Local tables for holding dynGroups and dynLists
- */
-
-static Tcl_HashTable dlTable;	/* stores dynLists  */
-static Tcl_HashTable dgTable;	/* stores dynGroups */
+/* to save as JSON */
+extern json_t *dg_to_json(DYN_GROUP *dg);
+extern json_t *dl_to_json(DYN_LIST *dl);
 
 /*
  * Callback function for deleted temporary lists 
@@ -120,14 +114,6 @@ static DYN_LIST *dynListScanString(Tcl_Interp *interp, DYN_LIST *dl,
 
 
 /*
- * Local variables used to manage groups and lists
- */
-
-static int dgCount = 0;		/* increasing count of dynGroups */
-static int dlCount = 0;		/* increasing count of dynLists  */
-static int localCount = 0;      /* for naming local variables    */
-static int returnCount = 0;     /* for naming returned lists     */
-/*
  * Defined enums used as clientData for tcl functions
  */
 enum DL_APPEND_MODE  { DL_APPEND, DL_PREPEND, DL_INSERT, DL_SPLICE_BEFORE,
@@ -191,8 +177,8 @@ enum DL_SCANNERS      { DL_SCAN_INT, DL_SCAN_FLOAT, DL_SCAN_BINARY,
 			DL_SCAN_OCTAL, DL_SCAN_HEX };
 
 enum DG_DELETERS     { DG_DELETE_NORMAL, DG_DELETE_TEMPS };
-enum DG_TOFROMSTRING { DG_TOFROM_BINARY, DG_TOFROM_BASE64 };
-enum DL_TOFROMSTRING { DL_TOFROM_BINARY, DL_TOFROM_BASE64 };
+enum DG_TOFROMSTRING { DG_TOFROM_BINARY, DG_TOFROM_BASE64, DG_TOFROM_JSON };
+enum DL_TOFROMSTRING { DL_TOFROM_BINARY, DL_TOFROM_BASE64, DL_TOFROM_JSON };
 /*****************************************************************************
  *                           TCL Bound Functions 
  *****************************************************************************/
@@ -267,7 +253,6 @@ static int tclLoadPackage             (ClientData, Tcl_Interp *, int, char **);
 static int tclDateToDays              (ClientData, Tcl_Interp *, int, char **); 
 static int tclDaysToDate              (ClientData, Tcl_Interp *, int, char **); 
 static int tclNoOp                    (ClientData, Tcl_Interp *, int, char **);
-
 
 static TCL_COMMANDS DLcommands[] = {
   { "dg_exists",           tclDynGroupExists,     NULL, 
@@ -792,22 +777,22 @@ static TCL_COMMANDS DLcommands[] = {
 
 
 static int tclDoTimes(ClientData data, Tcl_Interp * interp, int objc,
-		      Tcl_Obj * CONST objv[]);
+		      Tcl_Obj * const objv[]);
 static int tclForEach(ClientData data, Tcl_Interp * interp, int objc,
-		      Tcl_Obj * CONST objv[]);
+		      Tcl_Obj * const objv[]);
 static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
-			       Tcl_Obj * CONST objv[]);
+			       Tcl_Obj * const objv[]);
 static int tclDynGroupFromString(ClientData data, Tcl_Interp * interp, 
-				 int objc, Tcl_Obj * CONST objv[]);
+				 int objc, Tcl_Obj * const objv[]);
 static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
-			      Tcl_Obj * CONST objv[]);
+			      Tcl_Obj * const objv[]);
 static int tclDynListFromString(ClientData data, Tcl_Interp * interp, int objc,
-				Tcl_Obj * CONST objv[]);
+				Tcl_Obj * const objv[]);
 
 static int tclRegexpList(ClientData data, Tcl_Interp * interp, int objc,
-			 Tcl_Obj * CONST objv[]);
+			 Tcl_Obj * const objv[]);
 static int tclScanList(ClientData data, Tcl_Interp * interp, int objc,
-		       Tcl_Obj * CONST objv[]);
+		       Tcl_Obj * const objv[]);
 
 
 /*****************************************************************************
@@ -833,15 +818,32 @@ int Dl_Init(Tcl_Interp *interp)
 
   if (
 #ifdef USE_TCL_STUBS
-      Tcl_InitStubs(interp, "8.5", 0)
+      Tcl_InitStubs(interp, "8.5-", 0)
 #else
-      Tcl_PkgRequire(interp, "Tcl", "8.5", 0)
+      Tcl_PkgRequire(interp, "Tcl", "8.5-", 0)
 #endif
       == NULL) {
     return TCL_ERROR;
   }
 
+  DLSHINFO *dlshinfo = (DLSHINFO *) calloc(1, sizeof(DLSHINFO));
+  if (!dlshinfo) return TCL_ERROR;
 
+  dlshinfo->DefaultListIncrement = 15;
+  dlshinfo->DefaultGroupIncrement = 15;
+
+  dlshinfo->dgCount = 0;	/* increasing count of dynGroups */
+  dlshinfo->dlCount = 0;	/* increasing count of dynLists  */
+  dlshinfo->localCount = 0;	/* for naming local variables    */
+  dlshinfo->returnCount = 0;	/* for naming returned lists     */
+ 
+  Tcl_InitHashTable(&dlshinfo->dlTable, TCL_STRING_KEYS);
+  Tcl_InitHashTable(&dlshinfo->dgTable, TCL_STRING_KEYS);
+
+  Tcl_SetAssocData(interp, DLSH_ASSOC_DATA_KEY,
+		   NULL,
+		   (void *) dlshinfo);
+  
   while (DLcommands[i].name) {
     Tcl_CreateCommand(interp, DLcommands[i].name, 
 		      (Tcl_CmdProc *) DLcommands[i].func, 
@@ -861,10 +863,18 @@ int Dl_Init(Tcl_Interp *interp)
 		       (ClientData) DG_TOFROM_BASE64, NULL);
   Tcl_CreateObjCommand(interp, "dg_fromString64", tclDynGroupFromString,
 		       (ClientData) DG_TOFROM_BASE64, NULL);
+  Tcl_CreateObjCommand(interp, "dg_toJSON", tclDynGroupToString, 
+		       (ClientData) DG_TOFROM_JSON, NULL);
+  Tcl_CreateObjCommand(interp, "dg_json", tclDynGroupToString, 
+		       (ClientData) DG_TOFROM_JSON, NULL);
   Tcl_CreateObjCommand(interp, "dl_toString", tclDynListToString, 
 		       (ClientData) DL_TOFROM_BINARY, NULL);
   Tcl_CreateObjCommand(interp, "dl_toString64", tclDynListToString, 
 		       (ClientData) DL_TOFROM_BASE64, NULL);
+  Tcl_CreateObjCommand(interp, "dl_toJSON", tclDynListToString, 
+		       (ClientData) DL_TOFROM_JSON, NULL);
+  Tcl_CreateObjCommand(interp, "dl_json", tclDynListToString, 
+		       (ClientData) DL_TOFROM_JSON, NULL);
   Tcl_CreateObjCommand(interp, "dl_fromString", tclDynListFromString, 
 		       (ClientData) DL_TOFROM_BINARY, NULL);
   Tcl_CreateObjCommand(interp, "dl_fromString64", tclDynListFromString, 
@@ -886,11 +896,9 @@ int Dl_Init(Tcl_Interp *interp)
   Tcl_CreateObjCommand(interp, "dl_scanBinary", tclScanList,
 		       (ClientData) DL_SCAN_BINARY, NULL);
 
-  Tcl_InitHashTable(&dlTable, TCL_STRING_KEYS);
-  Tcl_InitHashTable(&dgTable, TCL_STRING_KEYS);
-
   Dm_Init(interp);		/* add the matrix functions */
 
+#if 0
   if ((startup_dir = getenv("DLSH_LIBRARY"))) {
     int last = strlen(startup_dir)-1;
     strcpy(startup_dirbuf, startup_dir);
@@ -914,7 +922,8 @@ int Dl_Init(Tcl_Interp *interp)
 
 
   Tcl_EvalFile(interp, startup);
-
+#endif
+  
   raninit();
 
 #ifdef WIN32
@@ -983,9 +992,9 @@ static int tclDynGroupExists (ClientData data, Tcl_Interp *interp,
   }
 
   if (tclFindDynGroup(interp, argv[1], NULL) == TCL_OK) 
-    interp->result = "1";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(1));
   else 
-    interp->result = "0";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
   return TCL_OK;
 }
 
@@ -1009,12 +1018,16 @@ static int tclDynGroupDir (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
   Tcl_HashSearch searchEntry;
   Tcl_DString dirList;
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   Tcl_DStringInit(&dirList);
-  entryPtr = Tcl_FirstHashEntry(&dgTable, &searchEntry);
+  entryPtr = Tcl_FirstHashEntry(&dlinfo->dgTable, &searchEntry);
   if (entryPtr) {
-    Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dgTable, entryPtr));
+    Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dlinfo->dgTable, entryPtr));
     while ((entryPtr = Tcl_NextHashEntry(&searchEntry))) {
-      Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dgTable, entryPtr));
+      Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dlinfo->dgTable, entryPtr));
     }
   }
   Tcl_DStringResult(interp, &dirList);
@@ -1043,24 +1056,28 @@ static int tclCreateDynGroup (ClientData data, Tcl_Interp *interp,
 			      int argc, char *argv[])
 {
   DYN_GROUP *dg;
-  int increment = DefaultGroupIncrement;
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
+  int increment = dlinfo->DefaultGroupIncrement;
   static char groupname[64];
 
   if (argc > 1) {
     strncpy(groupname, argv[1], 63);
-    dgCount++;
+    dlinfo->dgCount++;
   }
-  else sprintf(groupname, "group%d", dgCount++);
+  else sprintf(groupname, "group%d", dlinfo->dgCount++);
 
   if (argc > 2) {
     if (Tcl_GetInt(interp, argv[2], &increment) != TCL_OK) {
-      interp->result = "dg_create: invalid size argument";
+      Tcl_SetResult(interp, "dg_create: invalid size argument", TCL_STATIC);
       return TCL_ERROR;
     }
   }
 
   if (!(dg = dfuCreateNamedDynGroup(groupname, increment))) {
-    interp->result = "dg_create: error creating new dyngroup";
+    Tcl_SetResult(interp, "dg_create: error creating new dyngroup", TCL_STATIC);
     return TCL_ERROR;
   }
 
@@ -1073,26 +1090,32 @@ int tclPutGroup(Tcl_Interp *interp, DYN_GROUP *dg)
   Tcl_HashEntry *entryPtr;
   int newentry;
   static char groupname[64];
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
   
   if (!dg) return 0;
 
   if (!DYN_GROUP_NAME(dg)[0]) {
-    sprintf(groupname, "group%d", dgCount++);
+    sprintf(groupname, "group%d", dlinfo->dgCount++);
     strcpy(DYN_GROUP_NAME(dg), groupname);
   }
   else {
     strcpy(groupname, DYN_GROUP_NAME(dg));
   }
 
-  if ((entryPtr = Tcl_FindHashEntry(&dgTable, groupname))) {
-    sprintf(interp->result,"tclPutGroup: group %s already exists", groupname);
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, groupname))) {
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	     "tclPutGroup: group %s already exists", groupname);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
 
   /*
    * Add to hash table which contains list of open dyngroups
    */
-  entryPtr = Tcl_CreateHashEntry(&dgTable, groupname, &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, groupname, &newentry);
   Tcl_SetHashValue(entryPtr, dg);
 
   Tcl_SetResult(interp, groupname, TCL_STATIC);
@@ -1103,7 +1126,11 @@ static int tclDgTempName (ClientData data, Tcl_Interp *interp,
 			  int argc, char *argv[])
 {
   static char groupname[64];
-  sprintf(groupname, "group%d", dgCount++);
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+
+  sprintf(groupname, "group%d", dlinfo->dgCount++);
   Tcl_SetResult(interp, groupname, TCL_STATIC);
   return TCL_OK;
 }
@@ -1132,6 +1159,9 @@ static int tclCopyDynGroup (ClientData data, Tcl_Interp *interp,
   static char newname[64];
   Tcl_HashEntry *entryPtr;
   int newentry;
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
   
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " oldgroup [newgroup]",
@@ -1142,26 +1172,29 @@ static int tclCopyDynGroup (ClientData data, Tcl_Interp *interp,
 
   if (argc > 2) {
     strncpy(newname, argv[2], 63);
-    dgCount++;
+    dlinfo->dgCount++;
   }
-  else sprintf(newname, "group%d", dgCount++);
+  else sprintf(newname, "group%d", dlinfo->dgCount++);
 
   if (tclFindDynGroup(interp, argv[1], &old) != TCL_OK) return TCL_ERROR;
   
-  if ((entryPtr = Tcl_FindHashEntry(&dgTable, newname))) {
-    sprintf(interp->result,"dg_copy: group %s already exists", newname);
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, newname))) {
+    char resultstr[128];
+    snprintf(resultstr, sizeof(resultstr),
+	     "dg_copy: group %s already exists", newname);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
   
   if (!(new = dfuCopyDynGroup(old, newname))) {
-    sprintf(interp->result,"dg_copy: error copying group");
+    Tcl_SetResult(interp, "dg_copy: error copying group", TCL_STATIC);
     return TCL_ERROR;
   }
   
   /*
    * Add to hash table which contains list of open dyngroups
    */
-  entryPtr = Tcl_CreateHashEntry(&dgTable, newname, &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, newname, &newentry);
   Tcl_SetHashValue(entryPtr, new);
   
   Tcl_SetResult(interp, newname, TCL_STATIC);
@@ -1193,6 +1226,9 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
   int newentry;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc < 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], 
 		     " dyngroup/dyngroup:list newname", (char *) NULL);
@@ -1213,7 +1249,7 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
     if (tclFindDynGroup(interp, oldname, &dg) != TCL_OK) return TCL_ERROR;
 
     /* If the target name is already a group, delete it */
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, newname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, newname))) {
       DYN_GROUP *dgold;
       if ((dgold = Tcl_GetHashValue(entryPtr))) dfuFreeDynGroup(dgold);
       Tcl_DeleteHashEntry(entryPtr);
@@ -1224,11 +1260,11 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
       strncpy(DYN_GROUP_NAME(dg), newname, DYN_GROUP_NAME_SIZE-1);
     
     /* Add new name to hash table which contains list of open dyngroups */
-    entryPtr = Tcl_CreateHashEntry(&dgTable, DYN_GROUP_NAME(dg), &newentry);
+    entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg), &newentry);
     Tcl_SetHashValue(entryPtr, dg);
     
     /* And remove old name from hash table */
-    entryPtr = Tcl_FindHashEntry(&dgTable, oldname);
+    entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, oldname);
     Tcl_DeleteHashEntry(entryPtr);
 
     Tcl_SetResult(interp, newname, TCL_STATIC);
@@ -1569,22 +1605,50 @@ static int base64decode (char *in, unsigned int inLen, unsigned char *out, unsig
 }
 
 static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
-			       Tcl_Obj * CONST objv[])
+			       Tcl_Obj * const objv[])
 {
   Tcl_Obj * o;
   DYN_GROUP *dg;
   char *dgname;
   int oldval;			/* previous buffer increment */
   int encode64 = 0;
-  if ((int) data == DG_TOFROM_BASE64) encode64 = 1;
+  json_t *json;
+  char *json_str;
+  int json_flags = 0;
+  
+  if ((Tcl_Size) data == DG_TOFROM_BASE64) encode64 = 1;
 
-  if (objc != 3) {
+  if ((Tcl_Size) data == DG_TOFROM_JSON) {
+    if (objc != 2) {
+      Tcl_WrongNumArgs(interp, 1, objv, "dyngroup");
+      return TCL_ERROR;
+    }
+  }
+  else if (objc != 3) {
     Tcl_WrongNumArgs(interp, 1, objv, "dyngroup varname");
     return TCL_ERROR;
   }
   
   dgname = Tcl_GetStringFromObj(objv[1], NULL);
   if (tclFindDynGroup(interp, dgname, &dg) != TCL_OK) return TCL_ERROR;
+
+  /* create a json string representation */
+  if ((Tcl_Size) data == DG_TOFROM_JSON) {
+    json = dg_to_json(dg);
+    if (!json) {
+      Tcl_AppendResult(interp, "dg_toJSON: error creating json object", NULL);
+      return TCL_ERROR;
+    }
+    json_str = json_dumps(json, json_flags);
+    json_decref(json);
+    if (!json_str) {
+      Tcl_AppendResult(interp, "dg_toJSON: error dumping json string", NULL);
+      return TCL_ERROR;
+    }
+    Tcl_SetResult(interp, json_str, TCL_VOLATILE);
+    free(json_str);
+    return TCL_OK;
+  }
   
   dgInitBuffer();
   oldval = dgSetBufferIncrement(dgEstimateGroupSize(dg));
@@ -1597,7 +1661,8 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
     int encoded_length, result;
     encoded_length = (((dgGetBufferSize()/3) + (dgGetBufferSize() % 3 > 0)) * 4);
     encoded_data = (char *) calloc(encoded_length, sizeof(char));
-    result =  base64encode(dgGetBuffer(), dgGetBufferSize(), encoded_data, encoded_length);
+    result =  base64encode(dgGetBuffer(),
+			   dgGetBufferSize(), encoded_data, encoded_length);
     o = Tcl_NewStringObj(encoded_data, encoded_length);
     free(encoded_data);
   }
@@ -1605,7 +1670,7 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
   dgSetBufferIncrement(oldval);
 
   if (Tcl_ObjSetVar2(interp, objv[2], NULL, o,
-		     TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1) == NULL)
+		     TCL_LEAVE_ERR_MSG) == NULL)
     return TCL_ERROR;
   
   Tcl_SetObjResult(interp, Tcl_NewIntObj(Tcl_GetCharLength(o)));
@@ -1613,23 +1678,57 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
 }
 
 static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
-			      Tcl_Obj * CONST objv[])
+			      Tcl_Obj * const objv[])
 {
   Tcl_Obj * o;
   DYN_LIST *dl;
   char *dlname;
   int encode64 = 0;
   int nbytes;
-  if ((int) data == DL_TOFROM_BASE64) encode64 = 1;
 
-  if (objc != 3) {
-    Tcl_WrongNumArgs(interp, 1, objv, "dynlist varname");
-    return TCL_ERROR;
+  json_t *json;
+  char *json_str;
+  int json_flags = 0;
+
+  if ((Tcl_Size) data == DL_TOFROM_BASE64) encode64 = 1;
+
+  if ((Tcl_Size) data == DL_TOFROM_JSON) {
+    if (objc != 2) {
+      Tcl_WrongNumArgs(interp, 1, objv, "dynlist");
+      return TCL_ERROR;
+    }
+  }
+  else {
+    if (objc != 3) {
+      Tcl_WrongNumArgs(interp, 1, objv, "dynlist varname");
+      return TCL_ERROR;
+    }
   }
   
   dlname = Tcl_GetStringFromObj(objv[1], NULL);
   if (tclFindDynList(interp, dlname, &dl) != TCL_OK) return TCL_ERROR;
 
+  /* create a json string representation */
+  if ((Tcl_Size) data == DL_TOFROM_JSON) {
+    json = dl_to_json(dl);
+    if (!json) {
+      Tcl_AppendResult(interp, "dl_toJSON: error creating json object", NULL);
+      return TCL_ERROR;
+    }
+    json_str = json_dumps(json, json_flags);
+    json_decref(json);
+    if (!json_str) {
+      Tcl_AppendResult(interp, "dl_toJSON: error dumping json string", NULL);
+      return TCL_ERROR;
+    }
+    Tcl_SetResult(interp, json_str, TCL_VOLATILE);
+    free(json_str);
+    return TCL_OK;
+  }
+
+
+
+  
   if (DYN_LIST_DATATYPE(dl) == DF_LIST || DYN_LIST_DATATYPE(dl) == DF_STRING) {
     Tcl_SetResult(interp, "dl_toString: invalid datatype", NULL);
     return TCL_ERROR;
@@ -1668,7 +1767,7 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
   }
 
   if (Tcl_ObjSetVar2(interp, objv[2], NULL, o,
-		     TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1) == NULL)
+		     TCL_LEAVE_ERR_MSG) == NULL)
     return TCL_ERROR;
   
   Tcl_SetObjResult(interp, Tcl_NewIntObj(Tcl_GetCharLength(o)));
@@ -1676,17 +1775,20 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
 }
 
 static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp, 
-				 int objc, Tcl_Obj * CONST objv[])
+				 int objc, Tcl_Obj * const objv[])
 {
   DYN_GROUP *dg;
   Tcl_HashEntry *entryPtr;
   int newentry;
   char *newname = NULL;
   unsigned char *data;
-  int length;
+  Tcl_Size length;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   int encode64 = 0;
-  if ((int) cdata == DG_TOFROM_BASE64) encode64 = 1;
+  if ((Tcl_Size) cdata == DG_TOFROM_BASE64) encode64 = 1;
 
   if (objc < 2) {
     Tcl_WrongNumArgs(interp, 1, objv, "string [newname]");
@@ -1710,7 +1812,7 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
 
   if (objc > 2) {
     newname = Tcl_GetStringFromObj(objv[2], NULL);
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, newname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, newname))) {
       DYN_GROUP *dgold;
       if ((dgold = Tcl_GetHashValue(entryPtr))) dfuFreeDynGroup(dgold);
       Tcl_DeleteHashEntry(entryPtr);
@@ -1718,13 +1820,15 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
   }
 
   if (!(dg = dfuCreateDynGroup(4))) {
-    sprintf(interp->result, "dg_fromString: error creating new dyngroup");
+    Tcl_SetResult(interp, "dg_fromString: error creating new dyngroup",
+		  TCL_STATIC);
     return TCL_ERROR;
   }
   
   if (!encode64) {
     if (dguBufferToStruct(data, length, dg) != DF_OK) {
-      sprintf(interp->result,"dg_fromString: file not recognized as dg format");
+      Tcl_SetResult(interp, "dg_fromString: file not recognized as dg format",
+		    TCL_STATIC);
       return TCL_ERROR;
     }
   }
@@ -1738,16 +1842,19 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
 
     if (result) {
       free(decoded_data);
-      sprintf(interp->result,
-	      "dg_fromString64: error decoding data (%d/%d bytes)", 
-	      length, decoded_length);
+      char resultstr[128];
+      snprintf(resultstr, sizeof(resultstr),
+	       "dg_fromString64: error decoding data (%d/%d bytes)", 
+	       length, decoded_length);
+      Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
       return TCL_ERROR;
     }
 
     if (dguBufferToStruct(decoded_data, decoded_length, dg) != DF_OK) {
       free(decoded_data);
-      sprintf(interp->result,
-	      "dg_fromString64: file not recognized as dg format");
+      Tcl_SetResult(interp,
+		    "dg_fromString64: file not recognized as dg format",
+		    TCL_STATIC);
       return TCL_ERROR;
     }
 
@@ -1755,7 +1862,7 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
   }
 
   if (newname) strncpy(DYN_GROUP_NAME(dg), newname, DYN_GROUP_NAME_SIZE-1);
-  if ((entryPtr = Tcl_FindHashEntry(&dgTable, DYN_GROUP_NAME(dg)))) {
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg)))) {
     DYN_GROUP *dgold;
     if ((dgold = Tcl_GetHashValue(entryPtr))) {
       dfuFreeDynGroup(dgold);
@@ -1766,7 +1873,7 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
   /*
    * Add to hash table which contains list of open dyngroups
    */
-  entryPtr = Tcl_CreateHashEntry(&dgTable, DYN_GROUP_NAME(dg), &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg), &newentry);
   Tcl_SetHashValue(entryPtr, dg);
   
   Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
@@ -1775,16 +1882,16 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
 
 
 static int tclDynListFromString(ClientData cdata, Tcl_Interp * interp, 
-				int objc, Tcl_Obj * CONST objv[])
+				int objc, Tcl_Obj * const objv[])
 {
   DYN_LIST *dl;
   unsigned char *data;
   char *dlname;
-  int length;
+  Tcl_Size length;
   int i;
 
   int encode64 = 0;
-  if ((int) cdata == DG_TOFROM_BASE64) encode64 = 1;
+  if ((Tcl_Size) cdata == DG_TOFROM_BASE64) encode64 = 1;
 
   if (objc < 3) {
     Tcl_WrongNumArgs(interp, 1, objv, "string dl");
@@ -1861,9 +1968,11 @@ static int tclDynListFromString(ClientData cdata, Tcl_Interp * interp,
 
     if (result) {
       free(decoded_data);
-      sprintf(interp->result,
-	      "dl_fromString64: error decoding data (%d/%d bytes)", 
-	      length, decoded_length);
+      char resultstr[128];
+      snprintf(resultstr, sizeof(resultstr),
+	       "dl_fromString64: error decoding data (%d/%d bytes)", 
+	       length, decoded_length);
+      Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
       return TCL_ERROR;
     }
     
@@ -1886,10 +1995,11 @@ static int tclDynListFromString(ClientData cdata, Tcl_Interp * interp,
 	  dfuAddDynListFloat(dl, *((float *) &decoded_data[i]));
       }
       else {
-	sprintf(interp->result,
-		"dl_fromString64: error decoding data (%d/%d bytes)", 
-		length, decoded_length);
-      //	Tcl_AppendResult(interp, "dl_fromString64: invalid data", NULL);
+	char resultstr[128];
+	snprintf(resultstr, sizeof(resultstr),
+		 "dl_fromString64: error decoding data (%d/%d bytes)", 
+		 length, decoded_length);
+	Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
 	return TCL_ERROR;
       }
       break;
@@ -2006,6 +2116,9 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
   char *newname = NULL, *suffix;
   char tempname[128];
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " file [newname]", 
 		     (char *) NULL);
@@ -2014,7 +2127,7 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
 
   if (argc > 2) {
     newname = argv[2];
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, newname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, newname))) {
       DYN_GROUP *dgold;
       if ((dgold = Tcl_GetHashValue(entryPtr))) dfuFreeDynGroup(dgold);
       Tcl_DeleteHashEntry(entryPtr);
@@ -2022,7 +2135,7 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
   }
 
   if (!(dg = dfuCreateDynGroup(4))) {
-    sprintf(interp->result, "dg_read: error creating new dyngroup");
+    Tcl_SetResult(interp, "dg_read: error creating new dyngroup", TCL_STATIC);
     return TCL_ERROR;
   }
 
@@ -2031,7 +2144,10 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
       !strstr(suffix, "dgz")) {
     fp = fopen(argv[1], "rb");
     if (!fp) {
-      sprintf(interp->result,"dg_read: file %s not found", argv[1]);
+      char resultstr[256];
+      snprintf(resultstr, sizeof(resultstr),
+	       "dg_read: file %s not found", argv[1]);
+      Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
       return TCL_ERROR;
     }
     tempname[0] = 0;
@@ -2056,20 +2172,27 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
     if ((fp = uncompress_file(fullname, tempname)) == NULL) {
       sprintf(fullname,"%s.dgz", argv[1]);
       if ((fp = uncompress_file(fullname, tempname)) == NULL) {
+	char resultstr[256];
 	if (tempname[0] == 'f') { /* 'f'ile not found...*/
-	  sprintf(interp->result,"dg_read: file \"%s\" not found", argv[1]);
+	  snprintf(resultstr, sizeof(resultstr),
+		   "dg_read: file \"%s\" not found", argv[1]);
 	}
 	else {
-	  sprintf(interp->result,"dg_read: error opening tempfile");
+	  snprintf(resultstr, sizeof(resultstr),
+		   "dg_read: error opening tempfile");
 	}
+	Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
 	return TCL_ERROR;
       }
     }
   }
 
   if (!dguFileToStruct(fp, dg)) {
-    sprintf(interp->result,"dg_read: file %s not recognized as dg format", 
-	    argv[1]);
+    char resultstr[256];
+    snprintf(resultstr, sizeof(resultstr),
+	     "dg_read: file %s not recognized as dg format", 
+	     argv[1]);
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     fclose(fp);
     if (tempname[0]) unlink(tempname);
     return TCL_ERROR;
@@ -2079,7 +2202,7 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
 
  process_dg:
   if (newname) strncpy(DYN_GROUP_NAME(dg), newname, DYN_GROUP_NAME_SIZE-1);
-  if ((entryPtr = Tcl_FindHashEntry(&dgTable, DYN_GROUP_NAME(dg)))) {
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg)))) {
     DYN_GROUP *dgold;
     if ((dgold = Tcl_GetHashValue(entryPtr))) {
       dfuFreeDynGroup(dgold);
@@ -2090,7 +2213,7 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
   /*
    * Add to hash table which contains list of open dyngroups
    */
-  entryPtr = Tcl_CreateHashEntry(&dgTable, DYN_GROUP_NAME(dg), &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg), &newentry);
   Tcl_SetHashValue(entryPtr, dg);
   
   Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
@@ -2121,29 +2244,32 @@ static int tclDeleteDynGroup (ClientData data, Tcl_Interp *interp,
   DYN_GROUP *dg;
   Tcl_HashEntry *entryPtr;
   int i;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (operation == DG_DELETE_TEMPS) {
     Tcl_HashSearch search;
     char *name;
-    for (entryPtr = Tcl_FirstHashEntry(&dgTable, &search);
+    for (entryPtr = Tcl_FirstHashEntry(&dlinfo->dgTable, &search);
 	 entryPtr != NULL;
 	 entryPtr = Tcl_NextHashEntry(&search)) {
-      name = Tcl_GetHashKey(&dgTable, entryPtr);
+      name = Tcl_GetHashKey(&dlinfo->dgTable, entryPtr);
       if (!strncmp(name,"group",5)) {
 	Tcl_VarEval(interp, "dg_delete ", name, (char *) NULL);
       }
     }
-    dgCount = 0;
+    dlinfo->dgCount = 0;
   }
 
   else if (argc < 2) {
-    sprintf(interp->result, "usage: dg_delete dyngroup(s)");
+    Tcl_AppendResult(interp, "usage: ", argv[0], " dyngroup(s)", NULL);
     return TCL_ERROR;
   }
 
   for (i = 1; i < argc; i++) {
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, argv[i]))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, argv[i]))) {
       if ((dg = Tcl_GetHashValue(entryPtr))) dfuFreeDynGroup(dg);
       Tcl_DeleteHashEntry(entryPtr);
     }
@@ -2154,13 +2280,13 @@ static int tclDeleteDynGroup (ClientData data, Tcl_Interp *interp,
      */
     else if (!strcasecmp(argv[i],"ALL")) {
       Tcl_HashSearch search;
-      for (entryPtr = Tcl_FirstHashEntry(&dgTable, &search);
+      for (entryPtr = Tcl_FirstHashEntry(&dlinfo->dgTable, &search);
 	   entryPtr != NULL;
 	   entryPtr = Tcl_NextHashEntry(&search)) {
-	Tcl_VarEval(interp, "dg_delete ", Tcl_GetHashKey(&dgTable, entryPtr),
+	Tcl_VarEval(interp, "dg_delete ", Tcl_GetHashKey(&dlinfo->dgTable, entryPtr),
 		    (char *) NULL);
       }
-      dgCount = 0;
+      dlinfo->dgCount = 0;
     }
     else {
       Tcl_AppendResult(interp, "dg_delete: dyngroup \"", argv[i], 
@@ -2194,12 +2320,16 @@ static int tclAddNewListDynGroup (ClientData data, Tcl_Interp *interp,
 				  int argc, char *argv[])
 {
   DYN_GROUP *dg;
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
   
-  int datatype = DF_LONG, increment = DefaultListIncrement;
+  int datatype = DF_LONG, increment = dlinfo->DefaultListIncrement;
   static char listname[64];
 
   if (argc < 3) {
-    interp->result = "usage: dg_addNewList dyngroup name [[datatype] [size]]";
+    Tcl_AppendResult(interp, "usage: ", argv[0],
+		     " dyngroup name [[datatype] [size]]", NULL);
     return TCL_ERROR;
   }
 
@@ -2264,10 +2394,14 @@ static int tclAddExistingListDynGroup (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
   static char oldname[64], newname[64];
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc < 3) {
-    interp->result = "usage: dg_addExisingList dyngroup name [newname]";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " dyngroup name [newname]",
+		     NULL);
     return TCL_ERROR;
   }
 
@@ -2289,7 +2423,7 @@ static int tclAddExistingListDynGroup (ClientData data, Tcl_Interp *interp,
 
   switch (operation) {
   case DG_MOVE:
-    if ((entryPtr = Tcl_FindHashEntry(&dlTable, oldname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, oldname))) {
       dl = Tcl_GetHashValue(entryPtr);
       Tcl_DeleteHashEntry(entryPtr);
     }
@@ -2473,7 +2607,7 @@ static int tclDumpDynGroup (ClientData data, Tcl_Interp *interp,
 {
   DYN_GROUP *dg;
   int mode;
-  int output_format = (int) data;
+  int output_format = (Tcl_Size) data;
   int separator = '\t';
   Tcl_Channel outChannel;
 
@@ -2563,7 +2697,10 @@ int tclFindDynGroup(Tcl_Interp *interp, char *name, DYN_GROUP **dg)
   DYN_GROUP *g;
   Tcl_HashEntry *entryPtr;
 
-  if ((entryPtr = Tcl_FindHashEntry(&dgTable, name))) {
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, name))) {
     g = Tcl_GetHashValue(entryPtr);
     if (!g) {
       Tcl_SetResult(interp, "bad dyngroup ptr in hash table", TCL_STATIC);
@@ -2645,7 +2782,7 @@ static int tclSetMatherr (ClientData data, Tcl_Interp *interp,
     return TCL_ERROR;
   }
   if (Tcl_GetInt(interp, argv[1], &status) != TCL_OK)  return TCL_ERROR;
-  sprintf(interp->result, "%d", dynListSetMatherrCheck(status));
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(dynListSetMatherrCheck(status)));
   return TCL_OK;
 }
 
@@ -2671,15 +2808,19 @@ static int tclDynListDir (ClientData data, Tcl_Interp *interp,
   Tcl_DString dirList;
   DYN_LIST *dl;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
+
   Tcl_DStringInit(&dirList);
-  entryPtr = Tcl_FirstHashEntry(&dlTable, &searchEntry);
+  entryPtr = Tcl_FirstHashEntry(&dlinfo->dlTable, &searchEntry);
 
   if (entryPtr) {
     do {
       static char buf[16];
       Tcl_DStringStartSublist(&dirList);
       dl = (DYN_LIST *) Tcl_GetHashValue(entryPtr);
-      Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dlTable, entryPtr));
+      Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dlinfo->dlTable, entryPtr));
       Tcl_DStringAppendElement(&dirList, 
 			       dynGetDatatypeName(DYN_LIST_DATATYPE(dl)));
       sprintf(buf, "%d", DYN_LIST_N(dl));
@@ -2718,9 +2859,9 @@ static int tclDynListExists (ClientData data, Tcl_Interp *interp,
   }
 
   if (tclFindDynList(interp, argv[1], NULL) == TCL_OK)
-    interp->result = "1";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(1));
   else 
-    interp->result = "0";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
   return TCL_OK;
 }
 
@@ -2752,11 +2893,11 @@ static int tclDynListSublist (ClientData data, Tcl_Interp *interp,
   }
 
   if (tclFindDynList(interp, argv[1], &dl) != TCL_OK)
-    interp->result = "-1";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(-1));
   else if (DYN_LIST_FLAGS(dl) & DL_SUBLIST)
-    interp->result = "1";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(1));
   else
-    interp->result = "0";
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
   return TCL_OK;
 }
 
@@ -2781,7 +2922,7 @@ static int tclDynListDatatype (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl;
   char *name;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist", 
@@ -2793,8 +2934,9 @@ static int tclDynListDatatype (ClientData data, Tcl_Interp *interp,
   case DL_DATATYPE:
     if (tclFindDynList(interp, argv[1], &dl) != TCL_OK) return TCL_ERROR;
     name = dynGetDatatypeName(DYN_LIST_DATATYPE(dl));
-    if (name) interp->result = name;
-    else interp->result = "dl_datatype: unknown dynList datatype";
+    if (name) Tcl_SetObjResult(interp, Tcl_NewStringObj(name, -1));
+    else Tcl_SetResult(interp, "dl_datatype: unknown dynList datatype",
+		       TCL_STATIC);
     return TCL_OK;
     break;
   case DL_IS_MATRIX:
@@ -2804,8 +2946,10 @@ static int tclDynListDatatype (ClientData data, Tcl_Interp *interp,
 		       (char *) NULL);
       return TCL_ERROR;
     }
-    if (tclIsDynMatrix(interp, dl) != TCL_OK) interp->result = "0";
-    else interp->result = "1";
+    if (tclIsDynMatrix(interp, dl) != TCL_OK)
+      Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
+    else
+      Tcl_SetObjResult(interp, Tcl_NewIntObj(1));
     return TCL_OK;
     break;
   }
@@ -2834,10 +2978,14 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
-  int newentry, datatype = DF_LONG, increment = DefaultListIncrement;
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+
+  int newentry, datatype = DF_LONG, increment = dlinfo->DefaultListIncrement;
   static char listname[256];
   int i, startindex;		/* first optional arg */
-  
+
   if (data == 0) {		/* dl_create */
     if (argc > 1) {
       if (!dynGetDatatypeID(argv[1], &datatype)) {
@@ -2848,32 +2996,32 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
     startindex = 2;
   } 
   else {
-    datatype = (int) data;
+    datatype = (Tcl_Size) data;
     startindex = 1;
   }
 
   /* One of two places new temporary lists are created */
   /*   also see tclPutList, which converts an existing */
   /*   dynlist into a dynlist for dlsh...              */
-  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlCount);
-  sprintf(listname, "%%list%d%%", dlCount++);
+  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlinfo->dlCount);
+  sprintf(listname, "%%list%d%%", dlinfo->dlCount++);
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, listname))) {
-    sprintf(interp->result,"dl_create: list %s already exists", listname);
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
+    Tcl_AppendResult(interp,
+		     "dl_create: list ", listname, " already exists", NULL);
     return TCL_ERROR;
   }
 
   if (!(dl = dfuCreateNamedDynList(listname, datatype, increment))) {
-    sprintf(interp->result,"dl_create: error creating new dynlist");
+    Tcl_SetResult(interp, "dl_create: error creating new dynlist", TCL_STATIC);
     return TCL_ERROR;
   }
 
   /*
    * Add to hash table which contains list of open dynlists
    */
-  entryPtr = Tcl_CreateHashEntry(&dlTable, listname, &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, listname, &newentry);
   Tcl_SetHashValue(entryPtr, dl);
-
 
   /* NEW!!! */
   /* Add a local variable that will, when the current proc exits, free list */
@@ -2882,7 +3030,7 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
 	       TCL_TRACE_WRITES | TCL_TRACE_UNSETS, 
 	       (Tcl_VarTraceProc *) tclDeleteLocalDynList, 
 	       (ClientData) strdup(listname));
-
+  
   for (i = startindex; i < argc; i++) {
     if (argv[i][0]) {		/* as int as it's not the empty string */
       if (Tcl_VarEval(interp, "dl_append ", listname, " {", argv[i], "}", 
@@ -2901,17 +3049,23 @@ int tclPutList(Tcl_Interp *interp, DYN_LIST *dl)
   Tcl_HashEntry *entryPtr;
   int newentry;
   static char listname[128];
-  
-  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlCount);
-  sprintf(listname, "%%list%d%%", dlCount++);
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, listname))) {
-    sprintf(interp->result,"dl_create: list %s already exists", listname);
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
+
+  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlinfo->dlCount);
+  sprintf(listname, "%%list%d%%", dlinfo->dlCount++);
+
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
+    Tcl_AppendResult(interp, "dl_create: list ",
+		     listname, " already exists", NULL);
     return TCL_ERROR;
   }
   
   if (!dl) {
-    interp->result = "tclPutList: attempted to add NULL list ptr";
+    Tcl_SetResult(interp, "tclPutList: attempted to add NULL list ptr",
+		  TCL_STATIC);
     return TCL_ERROR;
   }
 
@@ -2920,7 +3074,7 @@ int tclPutList(Tcl_Interp *interp, DYN_LIST *dl)
   /*
    * Add to hash table which contains list of open dynlists
    */
-  entryPtr = Tcl_CreateHashEntry(&dlTable, listname, &newentry);
+  entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, listname, &newentry);
   Tcl_SetHashValue(entryPtr, dl);
 
   /* NEW!!! */
@@ -2959,13 +3113,16 @@ static int tclDeleteDynList (ClientData data, Tcl_Interp *interp,
   DYN_GROUP *dg;
   int groupid;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+    
   if (argc < 2) {
-    interp->result = "usage: dl_delete dynlist(s)";
+    Tcl_SetResult(interp, "usage: dl_delete dynlist(s)", TCL_STATIC);
     return TCL_ERROR;
   }
 
   for (i = 1; i < argc; i++) {
-    if ((entryPtr = Tcl_FindHashEntry(&dlTable, argv[i]))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, argv[i]))) {
       if (Tcl_GetVar(interp, argv[i], 0)) {
 	Tcl_UnsetVar(interp, argv[i], 0);
       }
@@ -2981,10 +3138,10 @@ static int tclDeleteDynList (ClientData data, Tcl_Interp *interp,
      */
     else if (!strcasecmp(argv[i],"ALL")) {
       Tcl_HashSearch search;
-      for (entryPtr = Tcl_FirstHashEntry(&dlTable, &search);
+      for (entryPtr = Tcl_FirstHashEntry(&dlinfo->dlTable, &search);
 	   entryPtr != NULL;
 	   entryPtr = Tcl_NextHashEntry(&search)) {
-	Tcl_VarEval(interp, "dl_delete ", Tcl_GetHashKey(&dlTable, entryPtr),
+	Tcl_VarEval(interp, "dl_delete ", Tcl_GetHashKey(&dlinfo->dlTable, entryPtr),
 		    (char *) NULL);
       }
     }
@@ -3028,12 +3185,15 @@ static int tclDeleteTraceDynList (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+    
   if (argc < 2) {
-    interp->result = "usage: dl_deleteTrace dynlist";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist", NULL);
     return TCL_ERROR;
   }
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, argv[1]))) {
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, argv[1]))) {
     if (Tcl_GetVar(interp, argv[1], 0)) {
       Tcl_UnsetVar(interp, argv[1], 0);
     }
@@ -3069,12 +3229,15 @@ static int tclCleanDynList (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
   Tcl_HashSearch search;
   char *listname;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
-  for (entryPtr = Tcl_FirstHashEntry(&dlTable, &search);
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
+  for (entryPtr = Tcl_FirstHashEntry(&dlinfo->dlTable, &search);
        entryPtr != NULL;
        entryPtr = Tcl_NextHashEntry(&search)) {
-    listname = Tcl_GetHashKey(&dlTable, entryPtr);
+    listname = Tcl_GetHashKey(&dlinfo->dlTable, entryPtr);
     if ((mode == DL_CLEAN_TEMPS && listname && listname[0] == '%') ||
 	(mode == DL_CLEAN_RETS && listname && listname[0] == '>')) {
       Tcl_VarEval(interp, "dl_delete ", listname, (char *) NULL);
@@ -3082,8 +3245,8 @@ static int tclCleanDynList (ClientData data, Tcl_Interp *interp,
   }
 
   /* reset the respective counter */
-  if (mode == DL_CLEAN_TEMPS) dlCount = 0;
-  else if (mode == DL_CLEAN_RETS) returnCount = 0;
+  if (mode == DL_CLEAN_TEMPS) dlinfo->dlCount = 0;
+  else if (mode == DL_CLEAN_RETS) dlinfo->returnCount = 0;
 
   return TCL_OK;
 }
@@ -3108,7 +3271,7 @@ static int tclRenameDynList (ClientData data, Tcl_Interp *interp,
 			     int argc, char *argv[])
 {
   if (argc != 3) {
-    interp->result = "usage: dl_rename oldname newname";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " oldname newname", NULL);
     return TCL_ERROR;
   }
 
@@ -3151,9 +3314,12 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
   static char gname[DYN_LIST_NAME_SIZE];
   DYN_GROUP *dg;
   int groupid;
-
+  
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc != 3) {
-    interp->result = "usage: dl_set name dynlist";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " dl_set name dynlist", NULL);
     return TCL_ERROR;
   }
 
@@ -3203,7 +3369,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
 	  !(DYN_LIST_FLAGS(newdl) & DL_SUBLIST)) { 
 	Tcl_ResetResult(interp);
 	if ((DYN_LIST_NAME(dl)[0] == '%' || DYN_LIST_NAME(dl)[0] == '>') &&
-	    (entryPtr = Tcl_FindHashEntry(&dlTable, DYN_LIST_NAME(dl))) &&
+	    (entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, DYN_LIST_NAME(dl))) &&
 	    !(DYN_LIST_FLAGS(dl) & DL_SUBLIST)) {
 	  Tcl_DeleteHashEntry(entryPtr);
 	  
@@ -3233,7 +3399,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
   }
 
   /* If the target list is in the dlTable, delete it */
-  else if ((entryPtr = Tcl_FindHashEntry(&dlTable,newname))) {
+  else if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable,newname))) {
     if ((newdl = Tcl_GetHashValue(entryPtr))) dfuFreeDynList(newdl);
     Tcl_DeleteHashEntry(entryPtr);
     newdl = NULL;
@@ -3245,7 +3411,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
   /*  as can a return list found in the dlTable            */
 
   if ((DYN_LIST_NAME(dl)[0] == '%' || DYN_LIST_NAME(dl)[0] == '>') &&
-      (entryPtr = Tcl_FindHashEntry(&dlTable, DYN_LIST_NAME(dl))) &&
+      (entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, DYN_LIST_NAME(dl))) &&
       !(DYN_LIST_FLAGS(dl) & DL_SUBLIST)) {
     Tcl_DeleteHashEntry(entryPtr);
 
@@ -3266,7 +3432,8 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
       int index;
 
       if (!(DYN_LIST_FLAGS(newdl) & DL_SUBLIST)) {
-	interp->result = "dl_set: temporary lists cannot be dl_set";
+	Tcl_AppendResult(interp, argv[0],
+			 ": temporary lists cannot be dl_set", NULL);
 	return TCL_ERROR;
       }
 
@@ -3282,7 +3449,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
     /* Make a new list */
     else {
       strncpy(DYN_LIST_NAME(dl), newname, DYN_LIST_NAME_SIZE-1);
-      entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+      entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
       Tcl_SetHashValue(entryPtr, dl);
     }
   }
@@ -3312,14 +3479,14 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
       strncpy(DYN_LIST_NAME(newlist), newname, DYN_LIST_NAME_SIZE-1);
       
       /* Get rid of any current list with this name */
-      entryPtr = Tcl_FindHashEntry(&dlTable, newname);
+      entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, newname);
       if (entryPtr) {
 	DYN_LIST *olddl;
 	if ((olddl = Tcl_GetHashValue(entryPtr))) dfuFreeDynList(olddl);
 	Tcl_DeleteHashEntry(entryPtr);
       }
 
-      entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+      entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
       Tcl_SetHashValue(entryPtr, newlist);
     }
   }
@@ -3340,7 +3507,10 @@ static char *tclDeleteLocalDynList(ClientData clientData, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
   DYN_LIST *dl;
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, (char *) clientData))) {
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return NULL;
+  
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, (char *) clientData))) {
     if ((dl = Tcl_GetHashValue(entryPtr))) { 
       dfuFreeDynList(dl);
     }
@@ -3389,15 +3559,21 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
   char *varname, *val;
   static char newname[256];
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc != 3) {
-    interp->result = "usage: dl_local name dynlist";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " name dynlist", NULL);
     return TCL_ERROR;
   }
 
   varname = argv[1];
   if ( strlen(varname) > (DYN_LIST_NAME_SIZE-8) ) { 
-    sprintf(interp->result, 
-	    "dl_local: variable name \"%s\" is too long (%d)", varname, (int) strlen(varname));
+    char resultstr[256];
+    snprintf(resultstr, sizeof(resultstr),
+	     "dl_local: variable name \"%s\" is too long (%d)",
+	     varname, (int) strlen(varname));
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
 
@@ -3418,7 +3594,7 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
       Tcl_UnsetVar(interp, varname, 0);
   }
 
-  sprintf(newname, "&%s_%d&", varname, localCount++);
+  sprintf(newname, "&%s_%d&", varname, dlinfo->localCount++);
 
   /* A temporary list that's in the dlTable can be renamed */
   /*   (temporary lists not in the dlTable are elements of */
@@ -3426,7 +3602,7 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
   /* Return lists (>#<) can also be renamed                */
 
   if ((DYN_LIST_NAME(dl)[0] == '%' || DYN_LIST_NAME(dl)[0] == '>') &&
-      (entryPtr = Tcl_FindHashEntry(&dlTable, DYN_LIST_NAME(dl))) &&
+      (entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, DYN_LIST_NAME(dl))) &&
       !(DYN_LIST_FLAGS(dl) & DL_SUBLIST)) {
     Tcl_DeleteHashEntry(entryPtr);
 
@@ -3438,13 +3614,13 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
     }
     
     strncpy(DYN_LIST_NAME(dl), newname, DYN_LIST_NAME_SIZE-1);
-    entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+    entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
     Tcl_SetHashValue(entryPtr, dl);
   }
   else {                        /* Do a recursive copy: leave old list  */
     DYN_LIST *newlist = dfuCopyDynList(dl);
     strncpy(DYN_LIST_NAME(newlist), newname, DYN_LIST_NAME_SIZE-1);
-    entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+    entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
     Tcl_SetHashValue(entryPtr, newlist);
   }
 
@@ -3488,14 +3664,17 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl;
   static char newname[256];
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (argc != 2) {
-    interp->result = "usage: dl_return dynlist";
+    Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist", NULL);
     return TCL_ERROR;
   }
   if (tclFindDynList(interp, argv[1], &dl) != TCL_OK) 
     return TCL_ERROR;
 
-  sprintf(newname, ">%d<", returnCount++);
+  sprintf(newname, ">%d<", dlinfo->returnCount++);
 
   /* A temporary list that's in the dlTable can be renamed */
   /*   (temporary lists not in the dlTable are elements of */
@@ -3504,20 +3683,20 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
   /*   dl_return'ed, though!                               */
 
   if (argv[1][0] != '>' &&
-      (entryPtr = Tcl_FindHashEntry(&dlTable, DYN_LIST_NAME(dl)))) {
+      (entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, DYN_LIST_NAME(dl)))) {
     Tcl_DeleteHashEntry(entryPtr);
     
     if (Tcl_GetVar(interp, DYN_LIST_NAME(dl), 0)) 
       Tcl_UnsetVar(interp, DYN_LIST_NAME(dl), 0);
     
     strncpy(DYN_LIST_NAME(dl), newname, DYN_LIST_NAME_SIZE-1);
-    entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+    entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
     Tcl_SetHashValue(entryPtr, dl);
   }
   else {                        /* Do a recursive copy: leave old list  */
     DYN_LIST *newlist = dfuCopyDynList(dl);
     strncpy(DYN_LIST_NAME(newlist), newname, DYN_LIST_NAME_SIZE-1);
-    entryPtr = Tcl_CreateHashEntry(&dlTable, newname, &newentry);
+    entryPtr = Tcl_CreateHashEntry(&dlinfo->dlTable, newname, &newentry);
     Tcl_SetHashValue(entryPtr, newlist);
   }
 
@@ -3527,7 +3706,7 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
   {
     static char tracecmd[256];
     sprintf(tracecmd, 
-	    "if {[info level]} {uplevel \"set %s %s; trace variable %s wu dl_deleteTrace\"}",
+	    "if {[info level]} {uplevel \"set %s %s; trace add variable %s wu dl_deleteTrace\"}",
 	    newname, newname, newname);
     Tcl_Eval(interp, tracecmd);
   }
@@ -3613,13 +3792,16 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   /* Pop everything off.. */
   if (argc > 1) {
     while (TmpListStack && TMPLIST_INDEX(TmpListStack) >= 0) {
       vals = (int *) DYN_LIST_VALS(TmpListRecordList);
       for (i = 0; i < DYN_LIST_N(TmpListRecordList); i++) {
 	sprintf(listname, "%%list%d%%", vals[i]);
-	if ((entryPtr = Tcl_FindHashEntry(&dlTable, listname))) {
+	if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
 
 
 	  if ((dl = Tcl_GetHashValue(entryPtr))) dfuFreeDynList(dl);
@@ -3658,7 +3840,7 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
   vals = (int *) DYN_LIST_VALS(TmpListRecordList);
   for (i = 0; i < DYN_LIST_N(TmpListRecordList); i++) {
     sprintf(listname, "%%list%d%%", vals[i]);
-    if ((entryPtr = Tcl_FindHashEntry(&dlTable, listname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
       if (Tcl_GetVar(interp, listname, 0)) {
 	Tcl_UnsetVar(interp, listname, 0);
       }
@@ -3702,7 +3884,7 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 			     int argc, char *argv[])
 {
   DYN_LIST *dl = NULL;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int i;
 
   if (mode == DL_FIRST || mode == DL_LAST || mode == DL_PICKONE) {
@@ -3736,7 +3918,7 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 
   
   if (i < 0 || i >= DYN_LIST_N(dl)) {
-    sprintf(interp->result, "%s: index out of range", argv[0]);
+    Tcl_AppendResult(interp, argv[0], ": index out of range", NULL);
     return TCL_ERROR;
   }
 
@@ -3750,9 +3932,9 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	  return TCL_ERROR;
 	}
 	vals[i] = element;
-	sprintf(interp->result, "%s", argv[1]);	
+	Tcl_AppendResult(interp, argv[1], NULL);	
       }
-      else sprintf(interp->result, "%d", vals[i]);
+      else Tcl_SetObjResult(interp, Tcl_NewIntObj(vals[i]));
       break;
     }
   case DF_SHORT:
@@ -3764,9 +3946,9 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	  return TCL_ERROR;
 	}
 	vals[i] = (short) element;
-	sprintf(interp->result, "%s", argv[1]);	
+	Tcl_AppendResult(interp, argv[1], NULL);	
       }
-      else sprintf(interp->result, "%hd", vals[i]);
+      else Tcl_SetObjResult(interp, Tcl_NewIntObj(vals[i]));
       break;
     }
   case DF_CHAR:
@@ -3778,9 +3960,9 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	  return TCL_ERROR;
 	}
 	vals[i] = (char) element;
-	sprintf(interp->result, "%s", argv[1]);	
+	Tcl_AppendResult(interp, argv[1], NULL);	
       }
-      else sprintf(interp->result, "%d", vals[i]);
+      else Tcl_SetObjResult(interp, Tcl_NewIntObj(vals[i]));
       break;
     }
   case DF_FLOAT:
@@ -3792,9 +3974,9 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	  return TCL_ERROR;
 	}
 	vals[i] = (float) element;
-	sprintf(interp->result, "%s", argv[1]);	
+	Tcl_AppendResult(interp, argv[1], NULL);	
       }
-      else sprintf(interp->result, "%f", (float) vals[i]);
+      else Tcl_SetObjResult(interp, Tcl_NewDoubleObj(vals[i]));
       break;
     }
   case DF_STRING:
@@ -3804,7 +3986,7 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	if (vals[i]) free((void *) vals[i]);
 	vals[i] = malloc(strlen(argv[3])+1);
 	strcpy(vals[i], argv[3]);
-	strcpy(interp->result,argv[1]);
+	Tcl_AppendResult(interp, argv[1], NULL);
       }
       else {
 	Tcl_SetResult(interp, vals[i], TCL_VOLATILE);
@@ -3819,7 +4001,7 @@ static int tclGetPutDynList (ClientData data, Tcl_Interp *interp,
 	if (tclFindDynList(interp, argv[3], &dl) != TCL_OK) return TCL_ERROR;
 	if (vals[i]) dfuFreeDynList(vals[i]);
 	vals[i] = dfuCopyDynList(dl);
-	strcpy(interp->result, argv[1]);
+	Tcl_AppendResult(interp, argv[1], NULL);
       }
       else if (vals[i]) {
 	return(tclPutList(interp, dfuCopyDynList(vals[i])));
@@ -3855,7 +4037,7 @@ static int tclAppendDynList (ClientData data, Tcl_Interp *interp,
 			     int argc, char *argv[])
 {
   DYN_LIST *dl, *dl2;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int i, start = 2, pos;
 
   switch (mode) {
@@ -3886,10 +4068,10 @@ static int tclAppendDynList (ClientData data, Tcl_Interp *interp,
      *   otherwise return the listname (works for things like "1 2 3")
      */
     if (strchr(argv[1],':')) {
-      strcpy(interp->result, argv[1]);
+      Tcl_AppendResult(interp, argv[1], NULL);
     }
     else {
-      strcpy(interp->result, DYN_LIST_NAME(dl));
+      Tcl_AppendResult(interp, DYN_LIST_NAME(dl), NULL);
     }
     return TCL_OK;
     break;    
@@ -4016,10 +4198,10 @@ static int tclAppendDynList (ClientData data, Tcl_Interp *interp,
    *   otherwise return the listname (works for things like "1 2 3")
    */
   if (strchr(argv[1],':')) {
-    strcpy(interp->result, argv[1]);
+    Tcl_AppendResult(interp, argv[1], NULL);
   }
   else {
-    strcpy(interp->result, DYN_LIST_NAME(dl));
+    Tcl_AppendResult(interp, DYN_LIST_NAME(dl), NULL);
   }
   return TCL_OK;
 }
@@ -4048,7 +4230,7 @@ static int tclConsDynList (ClientData data, Tcl_Interp *interp,
 			     int argc, char *argv[])
 {
   DYN_LIST *dl1, *dl2, *newlist;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (operation == DL_INCREMENT) {
     if (argc < 2) {
@@ -4072,7 +4254,7 @@ static int tclConsDynList (ClientData data, Tcl_Interp *interp,
       }
       vals = (int *) DYN_LIST_VALS(dl1);
       vals[index]++;
-      sprintf(interp->result, "%d", vals[index]);
+      Tcl_SetObjResult(interp, Tcl_NewIntObj(vals[index]));
       return TCL_OK;
     }
   }
@@ -4151,10 +4333,10 @@ static int tclConsDynList (ClientData data, Tcl_Interp *interp,
      *   otherwise return the listname (works for things like "1 2 3")
      */
     if (strchr(argv[1],':')) {
-      strcpy(interp->result, argv[1]);
+      Tcl_AppendResult(interp, argv[1], NULL);
     }
     else {
-      strcpy(interp->result, DYN_LIST_NAME(dl1));
+      Tcl_AppendResult(interp, DYN_LIST_NAME(dl1), NULL);
     }
     return TCL_OK;
   }
@@ -4212,7 +4394,7 @@ static int tclConsDynList (ClientData data, Tcl_Interp *interp,
 		       argv[1], "\"", (char *) NULL);
       return TCL_ERROR;
     }
-    strcpy(interp->result, DYN_LIST_NAME(dl1));
+    Tcl_AppendResult(interp, DYN_LIST_NAME(dl1), NULL);
     return TCL_OK;
   }
 
@@ -4261,31 +4443,28 @@ static int tclResetDynList (ClientData data, Tcl_Interp *interp,
     dfuResetDynList(dl);
   }
 
-  if (strchr(argv[1],':')) strcpy(interp->result, argv[1]);
-  else strcpy(interp->result, DYN_LIST_NAME(dl));
+  if (strchr(argv[1],':'))
+    Tcl_AppendResult(interp, argv[1], NULL);
+  else
+    Tcl_AppendResult(interp, DYN_LIST_NAME(dl), NULL);
   return TCL_OK;
 }
-
-
-int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
+Tcl_Obj *tclDynListToTclObj(Tcl_Interp *interp, DYN_LIST *dl)
 {
   int i;
-  static char buffer[32];
-  Tcl_DString newList;
-  
+
   if (!dl || DYN_LIST_N(dl) == 0) {
-    Tcl_ResetResult(interp);
-    return TCL_OK;
+    return NULL;
   }
 
-  Tcl_DStringInit(&newList);
+  Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+
   switch (DYN_LIST_DATATYPE(dl)) {
   case DF_LONG:
     {
       int *vals = (int *) DYN_LIST_VALS(dl);
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	sprintf(buffer, DLFormatTable[FMT_LONG], (int) vals[i]);
-	Tcl_DStringAppendElement(&newList, buffer);
+	Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(vals[i]));
       }
     }
     break;
@@ -4293,8 +4472,7 @@ int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
     {
       short *vals = (short *) DYN_LIST_VALS(dl);
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	sprintf(buffer, DLFormatTable[FMT_SHORT], (int) vals[i]);
-	Tcl_DStringAppendElement(&newList, buffer);
+	Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(vals[i]));
       }
     }
     break;
@@ -4302,8 +4480,7 @@ int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
     {
       float *vals = (float *) DYN_LIST_VALS(dl);
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	sprintf(buffer, DLFormatTable[FMT_FLOAT], vals[i]);
-	Tcl_DStringAppendElement(&newList, buffer);
+	Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewDoubleObj(vals[i]));
       }
     }
     break;
@@ -4311,8 +4488,7 @@ int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
     {
       char *vals = (char *) DYN_LIST_VALS(dl);
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	sprintf(buffer, DLFormatTable[FMT_CHAR], vals[i]);
-	Tcl_DStringAppendElement(&newList, buffer);
+	Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(vals[i]));
       }
     }
     break;
@@ -4321,13 +4497,14 @@ int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
       char **vals = (char **) DYN_LIST_VALS(dl);
       if (!strcmp(DLFormatTable[FMT_STRING], "%s")) {
 	for (i = 0; i < DYN_LIST_N(dl); i++) {
-	  Tcl_DStringAppendElement(&newList, vals[i]);
+	  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(vals[i], -1));
 	}
       }
       else {			/* should verify string length */
 	for (i = 0; i < DYN_LIST_N(dl); i++) {
-	  sprintf(buffer, DLFormatTable[FMT_STRING], vals[i]);
-	  Tcl_DStringAppendElement(&newList, buffer);
+	  char buffer[128];
+	  snprintf(buffer, sizeof(buffer), DLFormatTable[FMT_STRING], vals[i]);
+	  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(buffer, -1));
 	}
       }
     }
@@ -4335,17 +4512,34 @@ int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
   case DF_LIST:
     {
       DYN_LIST **vals = (DYN_LIST **) DYN_LIST_VALS(dl);
+      Tcl_Obj *sublist;
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	if (tclDynListToTclList(interp, vals[i]) != TCL_OK) {
-	  Tcl_DStringFree(&newList);
-	  return TCL_ERROR;
+	if (!(sublist = tclDynListToTclObj(interp, vals[i]))) {
+	  Tcl_DecrRefCount(listPtr);
+	  return NULL;
 	}
-	Tcl_DStringAppendElement(&newList, Tcl_GetStringResult(interp));
+	Tcl_ListObjAppendElement(interp, listPtr, sublist);
       }
     }
     break;
   }
-  Tcl_DStringResult(interp, &newList);
+  return listPtr;
+}
+
+int tclDynListToTclList(Tcl_Interp *interp, DYN_LIST *dl)
+{
+  if (!dl || DYN_LIST_N(dl) == 0) {
+    Tcl_ResetResult(interp);
+    return TCL_OK;
+  }
+
+  Tcl_Obj *listPtr = tclDynListToTclObj(interp, dl);
+  if (!listPtr) {
+    Tcl_AppendResult(interp, "error creating obj from dynlist", NULL);
+    return TCL_ERROR;
+  }
+
+  Tcl_SetObjResult(interp, listPtr);
   return TCL_OK;
 }
 
@@ -4359,9 +4553,10 @@ DYN_LIST *tclTclListToDynList(Tcl_Interp *interp, char *list)
   int i, j, ival, use_float = 0;
   double fval;
   char **varArgv;
-  int varArgc;
+  Tcl_Size varArgc;
 
-  if (Tcl_SplitList(interp, list, &varArgc, &varArgv) != TCL_OK) {
+  if (Tcl_SplitList(interp, list, &varArgc,
+		    (const char ***) &varArgv) != TCL_OK) {
     Tcl_ResetResult(interp);
     return NULL;
   }
@@ -4437,7 +4632,7 @@ static int tclDumpDynList (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl;
   Tcl_Channel outChannel = NULL ;
   int separator = '\t';
-  int output_format = (int) data;
+  int output_format = (Tcl_Size) data;
   int status = 0;
 
   if (argc < 2) {
@@ -4727,7 +4922,7 @@ static int tclConvertDynList (ClientData data, Tcl_Interp *interp,
 			    int argc, char *argv[])
 {
   DYN_LIST *dl, *newlist = NULL;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist [tclvar]",
@@ -4807,7 +5002,7 @@ static int tclUnsignedConvertDynList (ClientData data, Tcl_Interp *interp,
 				      int argc, char *argv[])
 {
   DYN_LIST *dl, *newlist = NULL;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc < 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist [tclvar]",
@@ -4867,7 +5062,7 @@ static int tclPermuteDynList (ClientData data, Tcl_Interp *interp,
 			      int argc, char *argv[])
 {
   DYN_LIST *dl1, *dl2, *newlist = NULL;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   /* Do the reverse here in three easy steps... */
   if (operation == DL_REVERSE || operation == DL_REVERSE_ALL || 
@@ -4932,7 +5127,7 @@ static int tclSelectDynList (ClientData data, Tcl_Interp *interp,
 			    int argc, char *argv[])
 {
   DYN_LIST *dl, *selections, *newlist;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc != 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " list selections",
@@ -4985,7 +5180,7 @@ static int tclReplaceDynList (ClientData data, Tcl_Interp *interp,
 			    int argc, char *argv[])
 {
   DYN_LIST *dl, *selections, *r, *newlist = NULL;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 4) {
     Tcl_AppendResult(interp, "usage: ", argv[0], 
@@ -5045,7 +5240,7 @@ static int tclFindSublist (ClientData data, Tcl_Interp *interp,
   int n;
   double k;
   int free_dl2 = 0;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], 
@@ -5139,7 +5334,7 @@ static int tclFindSublist (ClientData data, Tcl_Interp *interp,
   if (free_dl2) dfuFreeDynList(dl2);
   if (!result) {
     if (mode == DL_FIND) {
-      interp->result = "-1";
+      Tcl_SetObjResult(interp, Tcl_NewIntObj(-1));
       return TCL_OK;
     }
     else {
@@ -5193,7 +5388,7 @@ static int tclCompareDynList (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl1, *dl2, *newlist = NULL;
   int free_dl1 = 0, free_dl2 = 0;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (operation == DL_AND || operation == DL_OR) {
     if (argc < 3) {
@@ -5342,7 +5537,7 @@ static int tclCompareDynListIndices (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl1, *dl2, *newlist = NULL;
   int free_dl1 = 0, free_dl2 = 0;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (operation == DL_AND || operation == DL_OR) {
     if (argc < 3) {
@@ -5540,7 +5735,7 @@ static int tclArithDynList (ClientData data, Tcl_Interp *interp,
 {
   int i;
   DYN_LIST *dl1, *dl2, *newlist = NULL, *newlist1;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
   int mathop = -1;
 
   if (argc < 3) {
@@ -5636,7 +5831,7 @@ static int tclMathFuncOneArg (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl, *newlist;
   double k;
   int n;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
   int free_dl = 0;
 
   if (argc != 2) {
@@ -5740,7 +5935,7 @@ static int tclGenerateDynList (ClientData data, Tcl_Interp *interp,
   double sizef;
   DYN_LIST *newlist = NULL, *sizelist, *maxlist;
   int freesize = 0;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (operation == DL_RANDCHOOSE) {
     if (argc != 3) {
@@ -5957,7 +6152,7 @@ static int tclSeries (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *newlist, *startlist, *stoplist, *steplist;
   int alloced_steplist = 0;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc < 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " start stop [step]",
@@ -6094,7 +6289,7 @@ static int tclListFromList (ClientData data, Tcl_Interp *interp,
 			    int argc, char *argv[])
 {
   DYN_LIST *dl, *newlist = NULL;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
   int lag = 1, shift = 1, level = 0;
 
   if (operation == DL_DIFF) {
@@ -6395,8 +6590,11 @@ static int tclReshapeList (ClientData data, Tcl_Interp *interp,
     ncols = DYN_LIST_N(dl) / nrows;
   }
   if (nrows * ncols != DYN_LIST_N(dl)) {
-    sprintf(interp->result,"%s: cannot create a %dx%d list from %d elements",
-	    argv[0], nrows, ncols, DYN_LIST_N(dl));
+    char resultstr[256];
+    snprintf(resultstr, sizeof(resultstr),
+	     "%s: cannot create a %dx%d list from %d elements",
+	     argv[0], nrows, ncols, DYN_LIST_N(dl));
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
     return TCL_ERROR;
   }
   newlist = dynListReshapeList(dl, nrows, ncols);
@@ -6472,7 +6670,7 @@ static int tclRepList (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl, *newlist = NULL;
   int n;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc != 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist n",
@@ -6636,7 +6834,7 @@ static int tclCountLists (ClientData data, Tcl_Interp *interp,
 {
   DYN_LIST *dl, *newlist, *range;
   int count;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 4) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist start stop",
@@ -6653,7 +6851,7 @@ static int tclCountLists (ClientData data, Tcl_Interp *interp,
 
   if (mode == DL_SINGLE) {
     count = dynListCountList(dl, range);
-    sprintf(interp->result, "%d", count);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(count));
     dfuFreeDynList(range);
     return TCL_OK;
   }
@@ -6746,7 +6944,7 @@ static int tclHistLists (ClientData data, Tcl_Interp *interp,
   DYN_LIST *dl, *newlist = NULL;
   DYN_LIST *range;
   int nbins;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   
   if (argc != 5) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist start stop nbins",
@@ -6807,7 +7005,7 @@ static int tclSdfLists (ClientData data, Tcl_Interp *interp,
   DYN_LIST *startl, *stopl;
   int resolution;
   double start, stop, nsd, ksd;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 7) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist start stop",
@@ -6870,7 +7068,7 @@ static int tclSdfListsRecursive (ClientData data, Tcl_Interp *interp,
   DYN_LIST *startl, *stopl;
   int resolution;
   double start, stop, nsd, ksd;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 7) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist start stop",
@@ -6933,7 +7131,7 @@ static int tclParzenLists (ClientData data, Tcl_Interp *interp,
   DYN_LIST *startl, *stopl;
   int resolution;
   double start, stop, nsd, ksd;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
 
   if (argc != 7) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist start stop",
@@ -7005,7 +7203,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
   float retval = 0.0;
   int intval;
 
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   /* Only min / max can accept multiple args */
   if (argc > 2) {
@@ -7055,7 +7253,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
   switch (operation) {
   case DL_LENGTH:
     intval = DYN_LIST_N(dl);
-    sprintf(interp->result, "%d", intval);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(intval));
     return TCL_OK;
     break;
   case DL_MIN_INDEX:
@@ -7066,7 +7264,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
 		       argv[1], "\"", (char *) NULL);
       return TCL_ERROR;
     }
-    sprintf(interp->result, "%d", intval);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(intval));
     return TCL_OK;
     break;
   case DL_MAX_INDEX:
@@ -7077,7 +7275,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
 		       argv[1], "\"", (char *) NULL);
       return TCL_ERROR;
     }
-    sprintf(interp->result, "%d", intval);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(intval));
     return TCL_OK;
     break;
   case DL_MIN:
@@ -7106,7 +7304,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
     break;
   case DL_DEPTH:
     intval = dynListDepth(dl, 0);
-    sprintf(interp->result, "%d", intval);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(intval));
     return TCL_OK;
     break;
   case DL_MEAN:
@@ -7152,7 +7350,7 @@ static int tclReduceList (ClientData data, Tcl_Interp *interp,
     }
     break;
   }
-  sprintf(interp->result, "%f", retval);
+  Tcl_SetObjResult(interp, Tcl_NewDoubleObj(retval));
   return TCL_OK;
 }
 
@@ -7184,7 +7382,7 @@ static int tclReduceLists (ClientData data, Tcl_Interp *interp,
 			   int argc, char *argv[])
 {
   DYN_LIST *dl, *newlist = NULL;
-  int operation = (int) data;
+  int operation = (Tcl_Size) data;
 
   if (argc != 2) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dynlist",
@@ -7296,7 +7494,7 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
 			  int argc, char *argv[])
 {
   DYN_LIST *dl, *categories, *newlist = NULL;
-  int mode = (int) data;
+  int mode = (Tcl_Size) data;
   int startarg = 1;
 
   switch (mode) {
@@ -7320,7 +7518,7 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
   case DL_BYSELECTED:
     {
       char **varArgv, **selArgv;
-      int varArgc, selArgc;
+      Tcl_Size varArgc, selArgc;
       DYN_LIST *varlist, *sellist;
 
       if (argc != 4) {
@@ -7332,10 +7530,12 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
 	return TCL_ERROR;
       if (!DYN_LIST_N(dl)) goto emptyList;
       
-      if (Tcl_SplitList(interp, argv[2], &varArgc, &varArgv) != TCL_OK) {
+      if (Tcl_SplitList(interp, argv[2], &varArgc,
+			(const char ***) &varArgv) != TCL_OK) {
 	return TCL_ERROR;
       }
-      if (Tcl_SplitList(interp, argv[3], &selArgc, &selArgv) != TCL_OK) {
+      if (Tcl_SplitList(interp, argv[3], &selArgc,
+			(const char ***) &selArgv) != TCL_OK) {
 	Tcl_Free((void *) varArgv);
 	return TCL_ERROR;
       }
@@ -7480,7 +7680,7 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
 static char *file_string_func(Tcl_Interp *interp, char *name, int op)
 {
   static char res[128];
-  int argc;
+  Tcl_Size argc;
   char *dot;
   char **argv;
 
@@ -7488,7 +7688,7 @@ static char *file_string_func(Tcl_Interp *interp, char *name, int op)
 
   if (!name || !name[0]) return res;
 
-  Tcl_SplitPath(name, &argc, &argv);
+  Tcl_SplitPath(name, &argc, (const char ***) &argv);
 
   switch(op) {
   case DL_FILE_ROOT:
@@ -7497,7 +7697,7 @@ static char *file_string_func(Tcl_Interp *interp, char *name, int op)
       if ((dot = strrchr(argv[argc-1], '.')))
 	*dot = 0;
       Tcl_DStringInit(&resultPtr);
-      Tcl_JoinPath(argc, argv, &resultPtr);
+      Tcl_JoinPath(argc, (const char * const*) argv, &resultPtr);
       strncpy(res, Tcl_DStringValue(&resultPtr), 127);
       Tcl_DStringFree(&resultPtr);
       break;
@@ -7507,7 +7707,7 @@ static char *file_string_func(Tcl_Interp *interp, char *name, int op)
       Tcl_DString resultPtr;
       Tcl_DStringInit(&resultPtr);
       if (argc > 1) argc--;
-      Tcl_JoinPath(argc, argv, &resultPtr);
+      Tcl_JoinPath(argc, (const char * const*) argv, &resultPtr);
       strncpy(res, Tcl_DStringValue(&resultPtr), 127);
       Tcl_DStringFree(&resultPtr);
       break;
@@ -7569,7 +7769,7 @@ static DYN_LIST *dynListFileString(Tcl_Interp *interp, DYN_LIST *dl, int op)
 
 
 static int tclRegexpList(ClientData data, Tcl_Interp * interp, int objc,
-			 Tcl_Obj * CONST objv[])
+			 Tcl_Obj * const objv[])
 {
   char *dlname;
   DYN_LIST *dl;
@@ -7659,7 +7859,7 @@ static int tclRegexpList(ClientData data, Tcl_Interp * interp, int objc,
   */
 
 
-  if ((int) data == DL_REGMATCH) matchonly = 1;
+  if ((Tcl_Size) data == DL_REGMATCH) matchonly = 1;
 
   for (i = 1; i < objc; i++) {
     const char *name;
@@ -7810,7 +8010,7 @@ static DYN_LIST *dynListRegexpString(Tcl_Interp *interp, DYN_LIST *dl,
 
 
 static int tclScanList(ClientData data, Tcl_Interp * interp, int objc,
-		       Tcl_Obj * CONST objv[])
+		       Tcl_Obj * const objv[])
 {
   char *dlname, *procname;
   DYN_LIST *dl;
@@ -7827,7 +8027,7 @@ static int tclScanList(ClientData data, Tcl_Interp * interp, int objc,
   };
 
   procname = Tcl_GetString(objv[0]); /* for errors */
-  switch((int) data) {
+  switch((Tcl_Size) data) {
    case DL_SCAN_INT: base = 10; scan_int = 1; break;
    case DL_SCAN_FLOAT: base = 1; scan_int = 0; break;
    case DL_SCAN_OCTAL: base = 8; scan_int = 1; break;
@@ -8442,11 +8642,14 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
   DYN_LIST *list;
   static char outname[64];
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (dl) *dl = NULL;		/* initialize so that upon failure
 				 * it's set to NULL 
 				 */
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, name))) {
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, name))) {
     list = Tcl_GetHashValue(entryPtr);
     if (!list) {
       Tcl_SetResult(interp, "bad dynlist ptr in hash table", TCL_STATIC);
@@ -8511,7 +8714,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
     strncpy(groupname, name, len);
     groupname[colon-name] = 0;
     
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, groupname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, groupname))) {
       if (!(dg = Tcl_GetHashValue(entryPtr))) {
 	strncpy(outname, groupname, 63);
 	Tcl_ResetResult(interp);
@@ -8522,7 +8725,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
     }
     
     /* This searches for a *list* named groupname that is a list of lists */
-    else if ((entryPtr = Tcl_FindHashEntry(&dlTable, groupname))) {
+    else if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, groupname))) {
       DYN_LIST *dll;
 
       if (!(dll = Tcl_GetHashValue(entryPtr))) {
@@ -8713,11 +8916,14 @@ static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
   char *colon;
   DYN_LIST *list;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+    
   if (dl) *dl = NULL;		/* initialize so that upon failure
 				 * it's set to NULL 
 				 */
 
-  if ((entryPtr = Tcl_FindHashEntry(&dlTable, name))) {
+  if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, name))) {
     list = Tcl_GetHashValue(entryPtr);
     if (!list) {
       Tcl_SetResult(interp, "bad dynlist ptr in hash table", TCL_STATIC);
@@ -8753,7 +8959,7 @@ static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
     strncpy(groupname, name, colon-name);
     groupname[colon-name] = 0;
     
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, groupname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, groupname))) {
       if (!(dg = Tcl_GetHashValue(entryPtr))) {
 	Tcl_ResetResult(interp);
 	Tcl_AppendResult(interp, "dl_find: invalid dgptr ", groupname, 
@@ -8763,7 +8969,7 @@ static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
     }
     
     /* This searches for a *list* named groupname that is a list of lists */
-    else if ((entryPtr = Tcl_FindHashEntry(&dlTable, groupname))) {
+    else if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, groupname))) {
       DYN_LIST *dll;
 
       if (!(dll = Tcl_GetHashValue(entryPtr))) {
@@ -8855,6 +9061,9 @@ int tclFindDynListInGroup(Tcl_Interp *interp, char *name,
   DYN_GROUP *dg;
   int listid;
 
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  if (!dlinfo) return TCL_ERROR;
+  
   if (dgp) *dgp = NULL;		/* initialize so that upon failure */
   if (index) *index = 0;        /* it's set to NULL                */
 
@@ -8867,7 +9076,7 @@ int tclFindDynListInGroup(Tcl_Interp *interp, char *name,
     strncpy(groupname, name, colon-name);
     groupname[colon-name] = 0;
     
-    if ((entryPtr = Tcl_FindHashEntry(&dgTable, groupname))) {
+    if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, groupname))) {
       if (!(dg = Tcl_GetHashValue(entryPtr))) {
 	Tcl_ResetResult(interp);
 	Tcl_AppendResult(interp, "dl_find: invalid dgptr ", groupname, 
@@ -9190,7 +9399,7 @@ int dynListPrintValChan(Tcl_Interp * interp, DYN_LIST *dl, int i,
 \***************************************************************/
 
 static int tclDoTimes(ClientData data, Tcl_Interp * interp, int objc,
-	Tcl_Obj * CONST objv[])
+	Tcl_Obj * const objv[])
 {
 	int i, count;
 	Tcl_Obj * o;
@@ -9200,11 +9409,11 @@ static int tclDoTimes(ClientData data, Tcl_Interp * interp, int objc,
 		return TCL_ERROR;
 	}
 	if ((o = Tcl_ObjSetVar2(interp, objv[1], NULL, Tcl_NewObj(),
-		TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1)) == NULL)
+		TCL_LEAVE_ERR_MSG)) == NULL)
 		return TCL_ERROR;
 	if (Tcl_GetIntFromObj(interp, objv[2], &count) != TCL_OK) {
 		Tcl_UnsetVar2(interp, Tcl_GetStringFromObj(objv[1], NULL),
-			NULL, TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1);
+			NULL, TCL_LEAVE_ERR_MSG);
 		return TCL_ERROR;
 	}
 	for (i = 0; i < count; i++) {
@@ -9212,7 +9421,7 @@ static int tclDoTimes(ClientData data, Tcl_Interp * interp, int objc,
 		if (Tcl_EvalObj(interp, objv[3]) != TCL_OK) return TCL_ERROR;
 	}
 	return Tcl_UnsetVar2(interp, Tcl_GetStringFromObj(objv[1], NULL),
-		NULL, TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1);
+		NULL, TCL_LEAVE_ERR_MSG);
 }
 
 
@@ -9236,7 +9445,7 @@ static int forEachString(Tcl_Interp * interp, Tcl_Obj * obj, DYN_LIST * dl,
 			 Tcl_Obj * body);
 
 static int tclForEach(ClientData data, Tcl_Interp * interp, int objc,
-		      Tcl_Obj * CONST objv[])
+		      Tcl_Obj * const objv[])
 {
   int i;
   Tcl_Obj * o;
@@ -9247,12 +9456,12 @@ static int tclForEach(ClientData data, Tcl_Interp * interp, int objc,
     return TCL_ERROR;
   }
   if ((o = Tcl_ObjSetVar2(interp, objv[1], NULL, Tcl_NewObj(),
-			  TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1)) == NULL)
+			  TCL_LEAVE_ERR_MSG)) == NULL)
     return TCL_ERROR;
   if (tclFindDynList(interp, Tcl_GetStringFromObj(objv[2], NULL), &dl)
       != TCL_OK) {
     Tcl_UnsetVar2(interp, Tcl_GetStringFromObj(objv[1], NULL),
-		  NULL, TCL_LEAVE_ERR_MSG | TCL_PARSE_PART1);
+		  NULL, TCL_LEAVE_ERR_MSG);
     return TCL_ERROR;
   }
   switch(DYN_LIST_DATATYPE(dl)) {
@@ -9266,7 +9475,7 @@ static int tclForEach(ClientData data, Tcl_Interp * interp, int objc,
     i = forEachString(interp, o, dl, objv[3]); break;
   }
   Tcl_UnsetVar2(interp, Tcl_GetStringFromObj(objv[1], NULL),
-		NULL, TCL_PARSE_PART1);
+		NULL, TCL_LEAVE_ERR_MSG);
   return i;
 }
 
@@ -9364,7 +9573,13 @@ static int tclDaysToDate (ClientData data, Tcl_Interp *interp,
   if (Tcl_GetInt(interp, argv[1], &days) != TCL_OK) return TCL_ERROR;
 
   trDaysToDate(days, &day, &month, &year);
-  sprintf(interp->result, "%d %d %d", day, month, year);
+
+  Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(day));
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(month));
+  Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewIntObj(year));
+  Tcl_SetObjResult(interp, listPtr);
+
   return TCL_OK;
 }
 
@@ -9404,8 +9619,3 @@ static int tclDateToDays (ClientData data, Tcl_Interp *interp,
   Tcl_SetIntObj(Tcl_GetObjResult(interp), retval);
   return TCL_OK;
 }
-
-
-
-
-
