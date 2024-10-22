@@ -795,6 +795,15 @@ static int tclScanList(ClientData data, Tcl_Interp * interp, int objc,
 		       Tcl_Obj * const objv[]);
 
 
+static void deleteDlFunc(ClientData clientData, Tcl_Interp *interp)
+{
+  DLSHINFO *dlshinfo = (DLSHINFO *) clientData;
+  
+  Tcl_DeleteHashTable(&dlshinfo->dlTable);
+  Tcl_DeleteHashTable(&dlshinfo->dgTable);
+  free(dlshinfo);
+}
+
 /*****************************************************************************
  *
  * FUNCTION
