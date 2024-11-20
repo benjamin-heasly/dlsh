@@ -18,6 +18,23 @@
 #define DLLEXP
 #endif
 
+/*
+ * Tmplist stack structure for pushing & popping tmp list names
+ */
+
+typedef struct {
+  int size;
+  int index;
+  int increment;
+  DYN_LIST **lists;
+} TMPLIST_STACK;
+
+
+#define TMPLIST_SIZE(t)        ((t)->size)
+#define TMPLIST_INDEX(t)       ((t)->index)
+#define TMPLIST_INC(t)         ((t)->increment)
+#define TMPLIST_TMPLISTS(t)    ((t)->lists)
+
 typedef struct _dlshinfo {
   /*
    * Local tables for holding dynGroups and dynLists
@@ -39,6 +56,13 @@ typedef struct _dlshinfo {
   int localCount;       /* for naming local variables    */
   int returnCount;      /* for naming returned lists     */
 
+  /*
+   * for managing temporary list storage
+   */
+  TMPLIST_STACK *TmpListStack;
+  DYN_LIST *TmpListRecordList;
+    
+  
 } DLSHINFO;
 
 #define DLSH_ASSOC_DATA_KEY "dlsh"
