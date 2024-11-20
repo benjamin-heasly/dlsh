@@ -49,7 +49,9 @@
 
 /* to save as JSON */
 extern json_t *dg_to_json(DYN_GROUP *dg);
+extern json_t *dg_element_to_json(DYN_GROUP *dg, int element);
 extern json_t *dl_to_json(DYN_LIST *dl);
+extern json_t *dl_element_to_json(DYN_LIST *dl, int element);
 
 /*
  * Callback function for deleted temporary lists 
@@ -57,25 +59,6 @@ extern json_t *dl_to_json(DYN_LIST *dl);
 static char *tclDeleteLocalDynList(ClientData clientData, Tcl_Interp *interp,
 				   char *name1, char *name2, int flags);
 
-/*
- * Tmplist stack structure for pushing & popping tmp list names
- */
-
-typedef struct {
-  int size;
-  int index;
-  int increment;
-  DYN_LIST **lists;
-} TMPLIST_STACK;
-
-
-#define TMPLIST_SIZE(t)        ((t)->size)
-#define TMPLIST_INDEX(t)       ((t)->index)
-#define TMPLIST_INC(t)         ((t)->increment)
-#define TMPLIST_TMPLISTS(t)    ((t)->lists)
-
-static TMPLIST_STACK *TmpListStack = NULL;
-static DYN_LIST *TmpListRecordList = NULL;
 
 static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
 				DYN_LIST ***parent, int *index);
@@ -848,6 +831,14 @@ int Dl_Init(Tcl_Interp *interp)
  
   Tcl_InitHashTable(&dlshinfo->dlTable, TCL_STRING_KEYS);
   Tcl_InitHashTable(&dlshinfo->dgTable, TCL_STRING_KEYS);
+
+  dlshinfo->TmpListStack =  (TMPLIST_STACK *) calloc(1, sizeof(TMPLIST_STACK));
+  TMPLIST_SIZE(dlshinfo->TmpListStack) = 0;
+  TMPLIST_INDEX(dlshinfo->TmpListStack) = -1;
+  TMPLIST_TMPLISTS(dlshinfo->TmpListStack) = NULL;
+  TMPLIST_INC(dlshinfo->TmpListStack) = 4;
+  
+  dlshinfo->TmpListRecordList = NULL;
 
   Tcl_SetAssocData(interp, DLSH_ASSOC_DATA_KEY,
 		   NULL,
@@ -1624,13 +1615,18 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
   json_t *json;
   char *json_str;
   int json_flags = 0;
+  int row = -1;
   
   if ((Tcl_Size) data == DG_TOFROM_BASE64) encode64 = 1;
 
   if ((Tcl_Size) data == DG_TOFROM_JSON) {
-    if (objc != 2) {
-      Tcl_WrongNumArgs(interp, 1, objv, "dyngroup");
+    if (objc < 2) {
+      Tcl_WrongNumArgs(interp, 1, objv, "dyngroup [row]");
       return TCL_ERROR;
+    }
+    if (objc > 2) {
+      if (Tcl_GetIntFromObj(interp, objv[2], &row) != TCL_OK)
+	return TCL_ERROR;
     }
   }
   else if (objc != 3) {
@@ -1643,7 +1639,12 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
 
   /* create a json string representation */
   if ((Tcl_Size) data == DG_TOFROM_JSON) {
-    json = dg_to_json(dg);
+    if (row < 0) {
+      json = dg_to_json(dg);
+    }
+    else {
+      json = dg_element_to_json(dg, row);
+    }
     if (!json) {
       Tcl_AppendResult(interp, "dg_toJSON: error creating json object", NULL);
       return TCL_ERROR;
@@ -1666,7 +1667,7 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
     o = Tcl_NewByteArrayObj(dgGetBuffer(), dgGetBufferSize());
   }
   else {			/* base 64 encoded as ascii string */
-    unsigned char *encoded_data;
+    char *encoded_data;
     int encoded_length, result;
     encoded_length = (((dgGetBufferSize()/3) + (dgGetBufferSize() % 3 > 0)) * 4);
     encoded_data = (char *) calloc(encoded_length, sizeof(char));
@@ -1694,6 +1695,7 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
   char *dlname;
   int encode64 = 0;
   int nbytes;
+  int element = -1;
 
   json_t *json;
   char *json_str;
@@ -1702,9 +1704,13 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
   if ((Tcl_Size) data == DL_TOFROM_BASE64) encode64 = 1;
 
   if ((Tcl_Size) data == DL_TOFROM_JSON) {
-    if (objc != 2) {
-      Tcl_WrongNumArgs(interp, 1, objv, "dynlist");
+    if (objc < 2) {
+      Tcl_WrongNumArgs(interp, 1, objv, "dynlist [element]");
       return TCL_ERROR;
+    }
+    if (objc > 2) {
+      if (Tcl_GetIntFromObj(interp, objv[2], &element) != TCL_OK)
+	return TCL_ERROR;
     }
   }
   else {
@@ -1719,23 +1725,46 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
 
   /* create a json string representation */
   if ((Tcl_Size) data == DL_TOFROM_JSON) {
-    json = dl_to_json(dl);
+    if (element == -1)
+      json = dl_to_json(dl);
+    else
+      json = dl_element_to_json(dl, element);
+    
     if (!json) {
       Tcl_AppendResult(interp, "dl_toJSON: error creating json object", NULL);
       return TCL_ERROR;
     }
-    json_str = json_dumps(json, json_flags);
-    json_decref(json);
-    if (!json_str) {
-      Tcl_AppendResult(interp, "dl_toJSON: error dumping json string", NULL);
+    if (json_is_array(json)) {
+      json_str = json_dumps(json, json_flags);
+      json_decref(json);
+      
+      if (!json_str) {
+	Tcl_AppendResult(interp, "dl_toJSON: error dumping json string", NULL);
+	return TCL_ERROR;
+      }
+      Tcl_SetResult(interp, json_str, TCL_VOLATILE);
+      free(json_str);
+    }
+    else if (json_is_string(json)) {
+      Tcl_SetObjResult(interp, Tcl_NewStringObj(json_string_value(json),
+						json_string_length(json)));
+      json_decref(json);
+    }
+    else if (json_is_integer(json)) {
+      Tcl_SetObjResult(interp, Tcl_NewIntObj(json_integer_value(json)));
+      json_decref(json);
+    }	
+    else if (json_is_real(json)) {
+      Tcl_SetObjResult(interp, Tcl_NewDoubleObj(json_integer_value(json)));
+      json_decref(json);
+    }
+    else {
+      Tcl_AppendResult(interp, Tcl_GetString(objv[0]),
+		       ": unable to format JSON element", NULL);
       return TCL_ERROR;
     }
-    Tcl_SetResult(interp, json_str, TCL_VOLATILE);
-    free(json_str);
     return TCL_OK;
   }
-
-
 
   
   if (DYN_LIST_DATATYPE(dl) == DF_LIST || DYN_LIST_DATATYPE(dl) == DF_STRING) {
@@ -1764,7 +1793,7 @@ static int tclDynListToString(ClientData data, Tcl_Interp * interp, int objc,
   }
 
   else {			/* base 64 encoded as ascii string */
-    unsigned char *encoded_data;
+    char *encoded_data;
     int encoded_length, result;
     encoded_length = (((nbytes/3) + (nbytes % 3 > 0)) * 4);
     
@@ -1847,14 +1876,14 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
     int result;
 
     decoded_data = calloc(decoded_length, sizeof(char));
-    result = base64decode(data, length, decoded_data, &decoded_length);
+    result = base64decode((char *) data, length, decoded_data, &decoded_length);
 
     if (result) {
       free(decoded_data);
       char resultstr[128];
       snprintf(resultstr, sizeof(resultstr),
 	       "dg_fromString64: error decoding data (%d/%d bytes)", 
-	       length, decoded_length);
+	       (int) length, decoded_length);
       Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
       return TCL_ERROR;
     }
@@ -1969,18 +1998,18 @@ static int tclDynListFromString(ClientData cdata, Tcl_Interp * interp,
   }
   else {
     unsigned char *decoded_data;
-    int decoded_length = length;
+    unsigned int decoded_length = length;
     int result;
 
     decoded_data = calloc(decoded_length, sizeof(char));
-    result = base64decode(data, length, decoded_data, &decoded_length);
+    result = base64decode((char *) data, length, decoded_data, &decoded_length);
 
     if (result) {
       free(decoded_data);
       char resultstr[128];
       snprintf(resultstr, sizeof(resultstr),
 	       "dl_fromString64: error decoding data (%d/%d bytes)", 
-	       length, decoded_length);
+	       (int) length, decoded_length);
       Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
       return TCL_ERROR;
     }
@@ -2007,7 +2036,7 @@ static int tclDynListFromString(ClientData cdata, Tcl_Interp * interp,
 	char resultstr[128];
 	snprintf(resultstr, sizeof(resultstr),
 		 "dl_fromString64: error decoding data (%d/%d bytes)", 
-		 length, decoded_length);
+		 (int) length, decoded_length);
 	Tcl_SetObjResult(interp, Tcl_NewStringObj(resultstr, -1));
 	return TCL_ERROR;
       }
@@ -3012,7 +3041,7 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
   /* One of two places new temporary lists are created */
   /*   also see tclPutList, which converts an existing */
   /*   dynlist into a dynlist for dlsh...              */
-  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlinfo->dlCount);
+  if (dlinfo->TmpListRecordList) dfuAddDynListLong(dlinfo->TmpListRecordList, dlinfo->dlCount);
   sprintf(listname, "%%list%d%%", dlinfo->dlCount++);
 
   if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
@@ -3061,9 +3090,8 @@ int tclPutList(Tcl_Interp *interp, DYN_LIST *dl)
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
-  
 
-  if (TmpListRecordList) dfuAddDynListLong(TmpListRecordList, dlinfo->dlCount);
+  if (dlinfo->TmpListRecordList) dfuAddDynListLong(dlinfo->TmpListRecordList, dlinfo->dlCount);
   sprintf(listname, "%%list%d%%", dlinfo->dlCount++);
 
   if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
@@ -3671,7 +3699,7 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
   Tcl_HashEntry *entryPtr;
   int newentry;
   DYN_LIST *dl;
-  static char newname[256];
+  char newname[256];
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
@@ -3713,9 +3741,9 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
   /* it goes out of scope, the trace causes dl_deleteTrace to free it   */
   /* If we're at the top level, don't set the trace (not a normal case) */
   {
-    static char tracecmd[256];
+    char tracecmd[256];
     sprintf(tracecmd, 
-	    "if {[info level]} {uplevel \"set %s %s; trace add variable %s wu dl_deleteTrace\"}",
+	    "if {[info level]} {uplevel \"set %s %s; trace add variable %s {write unset} dl_deleteTrace\"}",
 	    newname, newname, newname);
     Tcl_Eval(interp, tracecmd);
   }
@@ -3752,42 +3780,35 @@ static int tclPushTmpList (ClientData data, Tcl_Interp *interp,
 			   int argc, char *argv[])
 {
   int i, j;
-  
-  /* if haven't created the stack yet, allocate */
-  if (!TmpListStack) {
-    TmpListStack = (TMPLIST_STACK *) calloc(1, sizeof(TMPLIST_STACK));
-    TMPLIST_SIZE(TmpListStack) = 0;
-    TMPLIST_INDEX(TmpListStack) = -1;
-    TMPLIST_TMPLISTS(TmpListStack) = NULL;
-    TMPLIST_INC(TmpListStack) = 4;
-  }
+
+  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
 
   /* if there isn't space to add the current tmplist, allocate */  
-  if (TMPLIST_INDEX(TmpListStack) == (TMPLIST_SIZE(TmpListStack)-1)) {
-    TMPLIST_SIZE(TmpListStack) += TMPLIST_INC(TmpListStack);
-    if (TMPLIST_TMPLISTS(TmpListStack)) {
-      TMPLIST_TMPLISTS(TmpListStack) = 
-	(DYN_LIST **) realloc(TMPLIST_TMPLISTS(TmpListStack), 
-			      TMPLIST_SIZE(TmpListStack)*sizeof(DYN_LIST *));
-      for (i = 0, j = TMPLIST_SIZE(TmpListStack) - 1; 
-	   i < TMPLIST_INC(TmpListStack); i++, j--) {
-	TMPLIST_TMPLISTS(TmpListStack)[j] = dfuCreateDynList(DF_LONG, 10);
+  if (TMPLIST_INDEX(dlinfo->TmpListStack) == (TMPLIST_SIZE(dlinfo->TmpListStack)-1)) {
+    TMPLIST_SIZE(dlinfo->TmpListStack) += TMPLIST_INC(dlinfo->TmpListStack);
+    if (TMPLIST_TMPLISTS(dlinfo->TmpListStack)) {
+      TMPLIST_TMPLISTS(dlinfo->TmpListStack) = 
+	(DYN_LIST **) realloc(TMPLIST_TMPLISTS(dlinfo->TmpListStack), 
+			      TMPLIST_SIZE(dlinfo->TmpListStack)*sizeof(DYN_LIST *));
+      for (i = 0, j = TMPLIST_SIZE(dlinfo->TmpListStack) - 1; 
+	   i < TMPLIST_INC(dlinfo->TmpListStack); i++, j--) {
+	TMPLIST_TMPLISTS(dlinfo->TmpListStack)[j] = dfuCreateDynList(DF_LONG, 10);
       }
     }
     else {
-      TMPLIST_TMPLISTS(TmpListStack) = 
-	(DYN_LIST **) calloc(TMPLIST_SIZE(TmpListStack), sizeof(DYN_LIST *));
-      for (i = 0; i < TMPLIST_SIZE(TmpListStack); i++) {
-	TMPLIST_TMPLISTS(TmpListStack)[i] = dfuCreateDynList(DF_LONG, 10);
+      TMPLIST_TMPLISTS(dlinfo->TmpListStack) = 
+	(DYN_LIST **) calloc(TMPLIST_SIZE(dlinfo->TmpListStack), sizeof(DYN_LIST *));
+      for (i = 0; i < TMPLIST_SIZE(dlinfo->TmpListStack); i++) {
+	TMPLIST_TMPLISTS(dlinfo->TmpListStack)[i] = dfuCreateDynList(DF_LONG, 10);
       }
     }
   }
-  TMPLIST_INDEX(TmpListStack)++;
+  TMPLIST_INDEX(dlinfo->TmpListStack)++;
   
   /* set tmplist to the top of the stack */
   
-  TmpListRecordList = 
-    TMPLIST_TMPLISTS(TmpListStack)[TMPLIST_INDEX(TmpListStack)];
+  dlinfo->TmpListRecordList = 
+    TMPLIST_TMPLISTS(dlinfo->TmpListStack)[TMPLIST_INDEX(dlinfo->TmpListStack)];
   
   return TCL_OK;
 }
@@ -3796,19 +3817,19 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
 			  int argc, char *argv[])
 {
   int *vals, i;
-  static char listname[64];
+  char listname[64];
 
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
-  
+
   /* Pop everything off.. */
   if (argc > 1) {
-    while (TmpListStack && TMPLIST_INDEX(TmpListStack) >= 0) {
-      vals = (int *) DYN_LIST_VALS(TmpListRecordList);
-      for (i = 0; i < DYN_LIST_N(TmpListRecordList); i++) {
+    while (dlinfo->TmpListStack && TMPLIST_INDEX(dlinfo->TmpListStack) >= 0) {
+      vals = (int *) DYN_LIST_VALS(dlinfo->TmpListRecordList);
+      for (i = 0; i < DYN_LIST_N(dlinfo->TmpListRecordList); i++) {
 	sprintf(listname, "%%list%d%%", vals[i]);
 	if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
 
@@ -3822,13 +3843,13 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
       
       /* Reset the old TmpListRecordList and "pop" it off */
       
-      dfuResetDynList(TmpListRecordList);
-      TMPLIST_INDEX(TmpListStack)--;
-      if (TMPLIST_INDEX(TmpListStack) >= 0) {
-	TmpListRecordList = 
-	  TMPLIST_TMPLISTS(TmpListStack)[TMPLIST_INDEX(TmpListStack)];
+      dfuResetDynList(dlinfo->TmpListRecordList);
+      TMPLIST_INDEX(dlinfo->TmpListStack)--;
+      if (TMPLIST_INDEX(dlinfo->TmpListStack) >= 0) {
+	dlinfo->TmpListRecordList = 
+	  TMPLIST_TMPLISTS(dlinfo->TmpListStack)[TMPLIST_INDEX(dlinfo->TmpListStack)];
       }
-      else TmpListRecordList = NULL;
+      else dlinfo->TmpListRecordList = NULL;
     }
     return TCL_OK;
   }
@@ -3836,7 +3857,7 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
 
   /* Just pop off the last one */
 
-  if (!TmpListStack || TMPLIST_INDEX(TmpListStack) < 0) {
+  if (!dlinfo->TmpListStack || TMPLIST_INDEX(dlinfo->TmpListStack) < 0) {
     Tcl_AppendResult(interp, argv[0], ": popped empty templist stack", 
 		     (char *) NULL);
     return TCL_ERROR;
@@ -3846,8 +3867,8 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
   /*  (It is not an error if the list no longer exists */
   /*   because it may have been renamed or deleted)    */
 
-  vals = (int *) DYN_LIST_VALS(TmpListRecordList);
-  for (i = 0; i < DYN_LIST_N(TmpListRecordList); i++) {
+  vals = (int *) DYN_LIST_VALS(dlinfo->TmpListRecordList);
+  for (i = 0; i < DYN_LIST_N(dlinfo->TmpListRecordList); i++) {
     sprintf(listname, "%%list%d%%", vals[i]);
     if ((entryPtr = Tcl_FindHashEntry(&dlinfo->dlTable, listname))) {
       if (Tcl_GetVar(interp, listname, 0)) {
@@ -3862,13 +3883,13 @@ static int tclPopTmpList (ClientData data, Tcl_Interp *interp,
 
   /* Reset the old TmpListRecordList and "pop" it off */
 
-  dfuResetDynList(TmpListRecordList);
-  TMPLIST_INDEX(TmpListStack)--;
-  if (TMPLIST_INDEX(TmpListStack) >= 0) {
-    TmpListRecordList = 
-      TMPLIST_TMPLISTS(TmpListStack)[TMPLIST_INDEX(TmpListStack)];
+  dfuResetDynList(dlinfo->TmpListRecordList);
+  TMPLIST_INDEX(dlinfo->TmpListStack)--;
+  if (TMPLIST_INDEX(dlinfo->TmpListStack) >= 0) {
+    dlinfo->TmpListRecordList = 
+      TMPLIST_TMPLISTS(dlinfo->TmpListStack)[TMPLIST_INDEX(dlinfo->TmpListStack)];
   }
-  else TmpListRecordList = NULL;
+  else dlinfo->TmpListRecordList = NULL;
 
   return TCL_OK;
 }
@@ -7688,7 +7709,7 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
 
 static char *file_string_func(Tcl_Interp *interp, char *name, int op)
 {
-  static char res[128];
+  char res[128];
   Tcl_Size argc;
   char *dot;
   char **argv;
@@ -7898,6 +7919,8 @@ static int tclRegexpList(ClientData data, Tcl_Interp * interp, int objc,
       break;
     case REGEXP_LINEANCHOR:
       cflags |= TCL_REG_NLANCH;
+      break;
+    default:
       break;
     }
   }
@@ -8497,7 +8520,7 @@ int tclFindSubDynList(Tcl_Interp *interp, char *dlname, DYN_LIST *dll,
 
   /* Only need to test if there are more than digits in selector */
   if (last && sel[0] == '<' && sel[last] == '>') {
-    static char lname[64];
+    char lname[64];
     DYN_LIST *seldl, *newdl;
     strncpy(lname, &sel[1], last-1);
     lname[last-1] = 0;
@@ -8517,7 +8540,7 @@ int tclFindSubDynList(Tcl_Interp *interp, char *dlname, DYN_LIST *dll,
   
     /* () -> do a dl_select */
   else if (last && sel[0] == '(' && sel[last] == ')') {
-    static char lname[64];
+    char lname[64];
     DYN_LIST *seldl, *newdl;
     strncpy(lname, &sel[1], last-1);
     lname[last-1] = 0;
@@ -8649,7 +8672,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
   Tcl_HashEntry *entryPtr;
   char *colon;
   DYN_LIST *list;
-  static char outname[64];
+  char outname[64];
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
@@ -8713,7 +8736,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
   else if (colon) {
     int len;
     DYN_GROUP *dg;
-    static char groupname[128], listname[128];
+    char groupname[128], listname[128];
     
     /* Get the group */
 
@@ -8761,7 +8784,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
     /* Could make this a loop, to allow depths greater than one */
     strncpy(listname, colon+1, 63);
     if ((colon = strchr(listname,':'))) {
-      static char lname[64], sel[32];
+      char lname[64], sel[32];
       
       /* Get the actual listname */
       if (colon-listname > 63) printf("Aha! (2)\n");
@@ -8786,7 +8809,7 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
       return TCL_OK;
     }
     else {
-      static char outname_list[64];
+      char outname_list[64];
 
       Tcl_ResetResult(interp);
       strncpy(outname, groupname, 63);
@@ -8846,8 +8869,8 @@ static int tclFindSubDynListParent(Tcl_Interp *interp, char *dlname,
   /* Peel off multiple selector id's and call recursively */
   if (colon) {
     DYN_LIST *interdl;
-    static char sel0[16];
-    static char newdlname[64];
+    char sel0[16];
+    char newdlname[64];
 
     /* Reject because a number this long can't be an index */
     if (colon-sel > 15) return TCL_ERROR;
@@ -8960,7 +8983,7 @@ static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
    */
   else if ((colon = strchr(name,':'))) {
     DYN_GROUP *dg;
-    static char groupname[64], listname[64];
+    char groupname[64], listname[64];
     
     /* Get the group */
 
@@ -9005,7 +9028,7 @@ static int tclFindDynListParent(Tcl_Interp *interp, char *name, DYN_LIST **dl,
     /* Could make this a loop, to allow depths greater than one */
     strncpy(listname, colon+1, 63);
     if ((colon = strchr(listname,':'))) {
-      static char lname[64], sel[32];
+      char lname[64], sel[32];
       
       /* Get the actual listname */
       if (colon-listname > 63) printf("Aha! (2)\n");
@@ -9077,7 +9100,7 @@ int tclFindDynListInGroup(Tcl_Interp *interp, char *name,
   if (index) *index = 0;        /* it's set to NULL                */
 
   if ((colon = strchr(name,':'))) {
-    static char groupname[64], listname[64];
+    char groupname[64], listname[64];
     
     /* Get the group */
     
@@ -9342,7 +9365,7 @@ int dynListChanDumpAsRow(Tcl_Interp * interp, DYN_LIST *dl, Tcl_Channel chan,
 int dynListPrintValChan(Tcl_Interp * interp, DYN_LIST *dl, int i,
 	Tcl_Channel chan)
 {
-  static char buf[32];
+  char buf[32];
   if (!dl) return(0);
   if (i < 0 || DYN_LIST_N(dl) <= i) return(0);
 
