@@ -7707,16 +7707,16 @@ static int tclSortByLists (ClientData data, Tcl_Interp *interp,
  *****************************************************************************/
 
 
-static char *file_string_func(Tcl_Interp *interp, char *name, int op)
+static int file_string_func(Tcl_Interp *interp, char *name, int op,
+			      char *buf, int buflen)
 {
-  char res[128];
   Tcl_Size argc;
   char *dot;
   char **argv;
 
-  res[0] = 0;			/* Empty string */
+  buf[0] = 0;			/* Empty string */
 
-  if (!name || !name[0]) return res;
+  if (!name || !name[0]) return 0;
 
   Tcl_SplitPath(name, &argc, (const char ***) &argv);
 
@@ -7728,7 +7728,7 @@ static char *file_string_func(Tcl_Interp *interp, char *name, int op)
 	*dot = 0;
       Tcl_DStringInit(&resultPtr);
       Tcl_JoinPath(argc, (const char * const*) argv, &resultPtr);
-      strncpy(res, Tcl_DStringValue(&resultPtr), 127);
+      strncpy(buf, Tcl_DStringValue(&resultPtr), buflen);
       Tcl_DStringFree(&resultPtr);
       break;
     }
@@ -7738,27 +7738,27 @@ static char *file_string_func(Tcl_Interp *interp, char *name, int op)
       Tcl_DStringInit(&resultPtr);
       if (argc > 1) argc--;
       Tcl_JoinPath(argc, (const char * const*) argv, &resultPtr);
-      strncpy(res, Tcl_DStringValue(&resultPtr), 127);
+      strncpy(buf, Tcl_DStringValue(&resultPtr), buflen);
       Tcl_DStringFree(&resultPtr);
       break;
     }
   case DL_FILE_TAIL:
-    strncpy(res, argv[argc-1], 127);
+    strncpy(buf, argv[argc-1], buflen);
     break;
   case DL_FILE_EXT:
     if ((dot = strrchr(argv[argc-1], '.')))
-      strncpy(res, dot+1, 127);
+      strncpy(buf, dot+1, buflen);
     break;
   case DL_FILE_BASE:
     if ((dot = strrchr(argv[argc-1], '.'))) {
       *dot = 0;
     }
-    strncpy(res, argv[argc-1], 127);
+    strncpy(buf, argv[argc-1], buflen);
     break;
   }
   Tcl_Free((char *) argv);
 
-  return res;
+  return 1;
 }
 
 static DYN_LIST *dynListFileString(Tcl_Interp *interp, DYN_LIST *dl, int op)
@@ -7770,11 +7770,13 @@ static DYN_LIST *dynListFileString(Tcl_Interp *interp, DYN_LIST *dl, int op)
   switch (DYN_LIST_DATATYPE(dl)) {
   case DF_STRING:
     {
+      char buf[256];
       char **vals = (char **) DYN_LIST_VALS(dl);
       newlist = dfuCreateDynList(DF_STRING, DYN_LIST_N(dl));
       if (!newlist) return(NULL);
       for (i = 0; i < DYN_LIST_N(dl); i++) {
-	dfuAddDynListString(newlist, file_string_func(interp, vals[i], op));
+	file_string_func(interp, vals[i], op, buf, sizeof(buf));
+	dfuAddDynListString(newlist, buf);
       }
       break;
     }
