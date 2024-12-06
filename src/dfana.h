@@ -35,6 +35,10 @@ enum DL_FORMAT_IDS { FMT_LONG, FMT_SHORT, FMT_FLOAT,
 #define MAX_FORMAT_STRING  128
 extern char DLFormatTable[][128];	/* contains format strings for data */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+  
 int dynListSetMatherrCheck(int);
 
 int dynGetDatatypeID(char *tname, int *tid);
@@ -372,3 +376,8 @@ float *sdfMakeKernel (float ksd, float nsd, int *ksize);
 
 void lowess(float *x, float *y, int n, float f, int nsteps, float delta,
 	   float *ys, float *rw, float *res);
+
+#ifdef __cplusplus
+}
+#endif
+  
