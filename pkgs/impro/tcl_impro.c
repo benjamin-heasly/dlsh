@@ -283,6 +283,7 @@ static int base64encode(const void* data_buf, int dataLength, char* result, int 
 
 
 #ifdef WIN32
+#define _ANSI_ARGS_(a) a
 EXPORT(int,Impro_Init) _ANSI_ARGS_((Tcl_Interp *interp))
 #else
 int Impro_Init(Tcl_Interp *interp)
