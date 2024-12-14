@@ -196,13 +196,13 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
   
   if (port != 0) {
     if (argc < 2) {
-      sprintf(interp->result, "usage: %s host", argv[0]);
+      Tcl_AppendResult(interp, "usage: ", argv[0], " host", NULL);
       return TCL_ERROR;
     }
   }
   else {
     if (argc < 3) {
-      sprintf(interp->result, "usage: %s host port", argv[0]);
+      Tcl_AppendResult(interp, "usage: ", argv[0], " host port", NULL);
       return TCL_ERROR;
     }
     port = atoi(argv[2]);
@@ -210,7 +210,7 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
 
   stat = WSAStartup( MAKEWORD(2,2), &wsadata );
   if (stat != 0) {
-    sprintf(interp->result, "error loading winsock");
+    Tcl_AppendResult(interp, "error loading winsock", NULL);
     return TCL_ERROR;
   }
   
@@ -222,7 +222,7 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
   
   newsock->socket = socket( AF_INET, SOCK_STREAM, 0 );
   if (newsock->socket == INVALID_SOCKET) {
-    sprintf(interp->result, "error creating socket");
+    Tcl_AppendResult(interp, "error creating socket", NULL);
     return TCL_ERROR;
   }
   
@@ -243,7 +243,7 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
   
   hp = gethostbyname( host );
   if (hp == NULL) {
-    sprintf(interp->result, "%s: host %s not found", argv[0], argv[1]);
+    Tcl_InterpResult(interp, argv[0], ": host ", argv[1], " not found", NULL);
     return TCL_ERROR;
   }
   
@@ -255,8 +255,8 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
   stat = connect( newsock->socket, (const struct sockaddr FAR *)&server,
 		  sizeof(server) );
   if (stat != 0) {
-    sprintf(interp->result, "%s: error connecting to host %s", 
-	    argv[0], argv[1]);
+    Tcl_AppendResult(interp, argv[0], ": error connecting to host ", 
+		     argv[1], NULL);
     return TCL_ERROR;
   }
   
@@ -273,7 +273,7 @@ int sockSendCmd(ClientData clientData, Tcl_Interp *interp,
   int i, len = 0;
   
   if (argc < 3) {
-    sprintf(interp->result, "usage: %s socket command", argv[0]);
+    Tcl_AppendResult(interp, "usage: ", argv[0], " socket command", NULL);
     return TCL_ERROR;
   }
   if (sockFindSocket(interp, argv[1], &sockentry) != TCL_OK)
@@ -317,13 +317,13 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
 
   if (port != 0) {
     if (argc < 3) {
-      sprintf(interp->result, "usage: %s host command", argv[0]);
+      Tcl_AppendResult(interp, "usage: ", argv[0], " host command", NULL);
       return TCL_ERROR;
     }
   }
   else {
     if (argc < 4) {
-      sprintf(interp->result, "usage: %s host port command", argv[0]);
+      Tcl_AppendResult(interp, "usage: ", argv[0], " host port command", NULL);
       return TCL_ERROR;
     }
     port = atoi(argv[2]);
@@ -332,7 +332,7 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
 
   stat = WSAStartup( MAKEWORD(2,2), &wsadata );
   if (stat != 0) {
-    sprintf(interp->result, "error loading winsock");
+    Tcl_AppendResult(interp, "error loading winsock", NULL);
     return TCL_ERROR;
   }
   
@@ -342,7 +342,7 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
   
   sock = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
   if (sock == INVALID_SOCKET) {
-    sprintf(interp->result, "error creating socket");
+    Tcl_AppendResult(interp, "error creating socket", NULL);
     WSACleanup();
     return TCL_ERROR;
   }
@@ -366,7 +366,7 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
   
   hp = gethostbyname( host );
   if (hp == NULL) {
-    sprintf(interp->result, "%s: host %s not found", argv[0], argv[1]);
+    Tcl_AppendResult(interp, argv[0], ": host ", argv[1], " not found", NULL);
     WSACleanup();
     return TCL_ERROR;
   }
@@ -379,12 +379,12 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
   stat = connect( sock, (const struct sockaddr FAR *)&server,
 		  sizeof(server) );
   if (stat != 0) {
-    sprintf(interp->result, "%s: error connecting to host %s", 
-	    argv[0], argv[1]);
+    Tcl_AppendResult(interp, argv[0],  ": error connecting to host ",
+		     argv[1], NULL);
     WSACleanup();
     return TCL_ERROR;
   }
-
+  
   /*------------------------------------------------------*/
   /* Read from stdin and write to socket, and             */
   /* read from socket and write to stdout.                */
@@ -503,12 +503,12 @@ void pWSAerror(char *text)
 
 
 
-EXPORT(int,Stimctrl_Init) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Stimctrl_Init) (Tcl_Interp *interp)
 {
 #ifdef USE_TCL_STUBS
-  Tcl_InitStubs(interp, "8.5", 0);
+  Tcl_InitStubs(interp, "8.5+", 0);
 #else
-  Tcl_PkgRequire(interp, "Tcl", "8.5", 0);
+  Tcl_PkgRequire(interp, "Tcl", "8.5+", 0);
 #endif
   
   if (Tcl_PkgProvide(interp, "stimctrl", "1.1") != TCL_OK) {
