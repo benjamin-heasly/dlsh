@@ -35,9 +35,9 @@ add_library(impro SHARED cimg_funcs.cpp imgdraw.c lodepng.c targa.c tcl_impro.c 
 
 if(WIN32)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set(DLSH dlsh.lib)
+	set(DLSH libdlsh.lib)
 	set(TCLLIB tclstub.lib)
-	set(CMAKE_EXE_MODULE_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:libcmt /NODEFAULTLIB:MSCVRT /def:${DEF_FILE}")
+	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /INCREMENTAL /LTCG /NODEFAULTLIB:libcmt /NODEFAULTLIB:MSCVRT /OUT:libimpro.dll")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 elseif(APPLE)
