@@ -183,7 +183,7 @@ static int sockCloseCmd (ClientData data, Tcl_Interp *interp,
 static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
 		       int argc, char *argv[])
 {
-  int    port = (int) clientData;     /* port to connect to */
+  unsigned long long port = (unsigned long long) clientData;     /* port to connect to */
   WSADATA wsadata;        /* Windows Sockets API data */
   struct hostent FAR *hp; /* ptr to host info struct */
   struct sockaddr_in server; /* socket address and port */
@@ -237,13 +237,13 @@ static int sockOpenCmd(ClientData clientData, Tcl_Interp *interp,
   }
   else {
     strncpy(host, hoststr, colon-hoststr);
-    host[colon-hoststr] = NULL;
+    host[colon-hoststr] = '\0';
     port = atoi(colon+1);	/* could have error checking here */
   }
   
   hp = gethostbyname( host );
   if (hp == NULL) {
-    Tcl_InterpResult(interp, argv[0], ": host ", argv[1], " not found", NULL);
+    Tcl_AppendResult(interp, argv[0], ": host ", argv[1], " not found", NULL);
     return TCL_ERROR;
   }
   
@@ -304,7 +304,7 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
 		int argc, char *argv[])
 {
   
-  int    port = (int) clientData;     /* port to connect to */
+  unsigned long long port = (unsigned long long) clientData;     /* port to connect to */
   WSADATA wsadata;        /* Windows Sockets API data */
   SOCKET sock;            /* socket descriptor */
   struct hostent FAR *hp; /* ptr to host info struct */
@@ -359,7 +359,7 @@ int rmtSendCmd(ClientData clientData, Tcl_Interp *interp,
   }
   else {
     strncpy(host, hoststr, colon-hoststr);
-    host[colon-hoststr] = NULL;
+    host[colon-hoststr] = '\0';
     port = atoi(colon+1);	/* could have error checking here */
   }
 
