@@ -56,7 +56,7 @@ static struct TableEntry DataTypeTable[] = {
  */
 char DLFormatTable[][128] = { "%d", "%d", "%f", "%s", "List(%d,%d)", "%d" };
 
-#if defined(WIN32)
+#if defined(XXXWIN32)
 double round(double x)
 {
   //middle value point test
@@ -69,7 +69,7 @@ double round(double x)
 }
 #endif
 
-#if defined(SGI) || defined(__QNX__) || defined(WIN32)
+#if defined(SGI) || defined(__QNX__) || defined(XXXWIN32)
 double lgamma(double xx)
 {
   double x,y,tmp,ser;
@@ -91,7 +91,7 @@ double lgamma(double xx)
 #define isnan(x) isnanf(x)
 #endif
 
-#if defined(__QNX__) || defined(WIN32)
+#if defined(__QNX__) || defined(XXXWIN32)
 #define isnan(x) (0)
 #endif
 
