@@ -67,7 +67,7 @@ int mdnsFindCmd(ClientData data, Tcl_Interp *interp,
 /************************************************************************/
 
 #ifdef WIN32
-EXPORT(int,Tcl_mdns_Init) _ANSI_ARGS_((Tcl_Interp *interp))
+EXPORT(int,Tcl_mdns_Init) (Tcl_Interp *interp)
 #else
      int Tcl_mdns_Init(Tcl_Interp *interp)
 #endif
