@@ -39,13 +39,11 @@
 #include "tcl_dl.h"
 #include <jansson.h>
 
-#ifdef WIN32
-#define ZLIB_DLL
-#define _WINDOWS
-#endif
 #include <zlib.h>
 
 #include <utilc.h>
+
+static const char *DLSH_ASSOC_DATA_KEY = "dlsh";
 
 /* to save as JSON */
 extern json_t *dg_to_json(DYN_GROUP *dg);
@@ -843,7 +841,7 @@ int Dl_Init(Tcl_Interp *interp)
   Tcl_SetAssocData(interp, DLSH_ASSOC_DATA_KEY,
 		   NULL,
 		   (void *) dlshinfo);
-  
+
   while (DLcommands[i].name) {
     Tcl_CreateCommand(interp, DLcommands[i].name, 
 		      (Tcl_CmdProc *) DLcommands[i].func, 
@@ -1084,14 +1082,13 @@ static int tclCreateDynGroup (ClientData data, Tcl_Interp *interp,
   return (tclPutGroup(interp, dg));
 }
 
-
 int tclPutGroup(Tcl_Interp *interp, DYN_GROUP *dg) 
 {
   Tcl_HashEntry *entryPtr;
   int newentry;
-  static char groupname[64];
-
-  DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
+  char groupname[64];
+  
+  DLSHINFO *dlinfo = (DLSHINFO *) Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
   
   if (!dg) return 0;
@@ -1118,7 +1115,7 @@ int tclPutGroup(Tcl_Interp *interp, DYN_GROUP *dg)
   entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, groupname, &newentry);
   Tcl_SetHashValue(entryPtr, dg);
 
-  Tcl_SetResult(interp, groupname, TCL_STATIC);
+  Tcl_SetResult(interp, groupname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -2431,7 +2428,7 @@ static int tclAddExistingListDynGroup (ClientData data, Tcl_Interp *interp,
   DYN_GROUP *dg;
   DYN_LIST *dl;
   Tcl_HashEntry *entryPtr;
-  static char oldname[64], newname[64];
+  char oldname[64], newname[64];
   int operation = (Tcl_Size) data;
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
@@ -2559,7 +2556,8 @@ static int tclRemoveDynGroupList (ClientData data, Tcl_Interp *interp,
 				  int argc, char *argv[])
 {
   DYN_GROUP *dg;
-
+  char name[64];
+  
   if (argc != 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0], " dyngroup list", 
 		     (char *) NULL);
@@ -2568,13 +2566,15 @@ static int tclRemoveDynGroupList (ClientData data, Tcl_Interp *interp,
   
   if (tclFindDynGroup(interp, argv[1], &dg) != TCL_OK) return TCL_ERROR;
 
+  strncpy(name, DYN_GROUP_NAME(dg), sizeof(name));
+  
   if (!dynGroupRemoveList(dg, argv[2])) {
     Tcl_AppendResult(interp, argv[0], ": list \"", argv[2],
 		     "\" not found in group \"", argv[1], "\"", (char *) NULL);
     return TCL_ERROR;
   }
 
-  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
+  Tcl_SetResult(interp, name, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -2748,7 +2748,7 @@ int tclFindDynGroup(Tcl_Interp *interp, char *name, DYN_GROUP **dg)
     return TCL_OK;
   }
   else {
-    static char outname[64];
+    char outname[64];
     strncpy(outname, name, 63);
     Tcl_AppendResult(interp, "dyngroup \"", outname, "\" not found", 
 		     (char *) NULL);
@@ -2855,7 +2855,7 @@ static int tclDynListDir (ClientData data, Tcl_Interp *interp,
 
   if (entryPtr) {
     do {
-      static char buf[16];
+      char buf[16];
       Tcl_DStringStartSublist(&dirList);
       dl = (DYN_LIST *) Tcl_GetHashValue(entryPtr);
       Tcl_DStringAppendElement(&dirList, Tcl_GetHashKey(&dlinfo->dlTable, entryPtr));
@@ -3021,7 +3021,7 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
   if (!dlinfo) return TCL_ERROR;
 
   int newentry, datatype = DF_LONG, increment = dlinfo->DefaultListIncrement;
-  static char listname[256];
+  char listname[256];
   int i, startindex;		/* first optional arg */
 
   if (data == 0) {		/* dl_create */
@@ -3078,7 +3078,7 @@ static int tclCreateDynList (ClientData data, Tcl_Interp *interp,
     }
   }
   
-  Tcl_SetResult(interp, listname, TCL_STATIC);
+  Tcl_SetResult(interp, listname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -3086,7 +3086,7 @@ int tclPutList(Tcl_Interp *interp, DYN_LIST *dl)
 {
   Tcl_HashEntry *entryPtr;
   int newentry;
-  static char listname[128];
+  char listname[128];
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
@@ -3121,7 +3121,7 @@ int tclPutList(Tcl_Interp *interp, DYN_LIST *dl)
 	       (Tcl_VarTraceProc *) tclDeleteLocalDynList, 
 	       (ClientData) strdup(listname));
 
-  Tcl_SetResult(interp, listname, TCL_STATIC);
+  Tcl_SetResult(interp, listname, TCL_VOLATILE);
   return TCL_OK;
 }
 
