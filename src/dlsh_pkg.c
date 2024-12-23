@@ -28,10 +28,10 @@ extern int Cgbase_Init(Tcl_Interp * interp) ;
 EXPORT(int,Dlsh_Init) (Tcl_Interp *interp)
 {
   if (Dl_Init(interp) == TCL_ERROR) return(TCL_ERROR);
+  if (Df_Init(interp) == TCL_ERROR) return(TCL_ERROR);
   if (Dlg_Init(interp) == TCL_ERROR) return(TCL_ERROR);
   if (Cgbase_Init(interp) == TCL_ERROR) return(TCL_ERROR) ;
   if (Cgps_Init(interp) == TCL_ERROR) return(TCL_ERROR);
-  if (Df_Init(interp) == TCL_ERROR) return(TCL_ERROR);
 
   Tcl_PkgProvide(interp, "dlsh", "1.2");
 

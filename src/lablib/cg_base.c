@@ -115,7 +115,7 @@ static int cgGetFrame(ClientData clientData, Tcl_Interp *interp,
 		 int argc, char *argv[])
 {
   char resultstr[32];
-  snprintf(resultstr, sizeof(resultstr), "%x", getframe());
+  snprintf(resultstr, sizeof(resultstr), "%p", getframe());
   Tcl_AppendResult(interp, resultstr, NULL);
   return TCL_OK;
 }

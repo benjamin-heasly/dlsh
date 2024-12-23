@@ -65,8 +65,6 @@ typedef struct _dlshinfo {
   
 } DLSHINFO;
 
-#define DLSH_ASSOC_DATA_KEY "dlsh"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
