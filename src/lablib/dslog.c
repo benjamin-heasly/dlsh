@@ -189,10 +189,11 @@ static int dpoint_read(FILE *fp, ds_datapoint_t **dpoint)
   dp = (ds_datapoint_t *) malloc(sizeof(ds_datapoint_t));
 
   dp->varlen = varlen;
-  dp->varname = malloc(varlen);
+  dp->varname = malloc(varlen+1); /* we add the null term */
   if (!dp->varname) goto memory_error;
   if (fread(dp->varname, dp->varlen, 1, fp) != 1)
     goto read_error;
+  dp->varname[dp->varlen] = '\0'; /* set null term here   */
   if (fread(&(dp->timestamp), sizeof(uint64_t), 1, fp) != 1)
     goto read_error;
   if (fread(&(dp->flags), sizeof(uint32_t), 1, fp) != 1)
