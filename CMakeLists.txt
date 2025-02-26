@@ -38,6 +38,10 @@ include_directories(${TCL_INCLUDE_DIR} src)
 ###############################
 add_library(dlsh SHARED src/dfana.c src/tcl_dlg.c src/dfevt.c src/dlsh_pkg.c src/tcl_df.c src/tcl_dm.c src/dlarith.c src/dmana.c src/tcl_dl.c src/dgjson.c src/lablib/gbufutl.c src/lablib/gbuf.c src/lablib/cg_ps.c src/lablib/cg_base.c src/lablib/axes.c src/lablib/cgraph.c src/lablib/timer.c src/lablib/utilc_unix.c src/lablib/randvars.c src/lablib/prmutil.c src/lablib/dfutils.c src/lablib/df.c src/lablib/dynio.c src/lablib/rawapi.c src/lablib/lodepng.c src/lablib/lz4utils.c src/lablib/dslog.c )
 
+project(dlsh-static)
+
+add_library(dlsh-static src/dfana.c src/tcl_dlg.c src/dfevt.c src/dlsh_pkg.c src/tcl_df.c src/tcl_dm.c src/dlarith.c src/dmana.c src/tcl_dl.c src/dgjson.c src/lablib/gbufutl.c src/lablib/gbuf.c src/lablib/cg_ps.c src/lablib/cg_base.c src/lablib/axes.c src/lablib/cgraph.c src/lablib/timer.c src/lablib/utilc_unix.c src/lablib/randvars.c src/lablib/prmutil.c src/lablib/dfutils.c src/lablib/df.c src/lablib/dynio.c src/lablib/rawapi.c src/lablib/lodepng.c src/lablib/lz4utils.c src/lablib/dslog.c )
+
 if(WIN32)
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 	set(DEF_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/dlsh.def)
@@ -73,6 +77,8 @@ else()
 	set(PDFLIB hpdf)
 endif()
 target_link_libraries( dlsh ${LIBJANSSON} ${TCLLIB} ${PDFLIB} ${LZ4LIB} ${ZLIB} )
+
+target_link_libraries( dlsh-static ${LIBJANSSON} ${TCLLIB} ${PDFLIB} ${LZ4LIB} ${ZLIB} )
 
 set (CMAKE_INSTALL_PREFIX ../dlshell/dlshell.vfs/lib/dlsh)
 if (WIN32)
