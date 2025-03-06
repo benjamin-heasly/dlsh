@@ -69,7 +69,7 @@ jobs:
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
         with:
-          artifacts: /work/artifacts/lib/*.zip
+          artifacts: /work/artifacts/*.zip
           body: libs and headers for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
