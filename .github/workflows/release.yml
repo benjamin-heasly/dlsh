@@ -64,12 +64,12 @@ jobs:
       - name: Create a platform-specific zip of libs.
         run: |
           cd /work/artifacts/lib
-          zip dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip dlsh.so dlsh-static.a
+          zip dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip *.so *.a
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
         with:
-          artifacts: dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip
+          artifacts: /work/artifacts/lib/*.zip
           body: libs for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
