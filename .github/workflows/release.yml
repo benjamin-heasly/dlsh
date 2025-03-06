@@ -36,11 +36,9 @@ jobs:
           git clone https://github.com/akheron/jansson.git
           cd jansson/
           git checkout v2.14
-          mkdir build/
-          cd build/
-          cmake ..
-          make
-          sudo make install
+          cmake -B build
+          cmake --build build
+          sudo cmake --install build
 
       - name: Install Libharu to the build environment (static and dynamic libs both).
         run: |
@@ -52,7 +50,7 @@ jobs:
           cmake --install build
           cmake -DBUILD_SHARED_LIBS=ON -B build
           cmake --build build
-          cmake --install build
+          sudo cmake --install build
 
       - name: Check out our dlsh code for the current tag.
         uses: actions/checkout@v4
@@ -61,7 +59,7 @@ jobs:
         run: |
           cmake -DCMAKE_INSTALL_PREFIX=/work/artifacts/ -B build
           cmake --build build
-          cmake --install build
+          sudo cmake --install build
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
