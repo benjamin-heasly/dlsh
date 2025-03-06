@@ -1,4 +1,4 @@
-name: Build and Release Libs
+name: Build and Release
 
 on:
   push:
@@ -59,7 +59,7 @@ jobs:
         run: |
           cmake -DCMAKE_INSTALL_PREFIX=/work/artifacts/ -B build
           cmake --build build
-          sudo cmake --install build
+          cmake --install build
 
       - name: Create a platform-specific zip of libs.
         run: |
