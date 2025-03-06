@@ -44,7 +44,7 @@ jobs:
 
       - name: Install Libharu to the build environment (static and dynamic libs both).
         run: |
-          git https://github.com/libharu/libharu.git
+          git clone https://github.com/libharu/libharu.git
           cd libharu
           git checkout v2.4.4
           cmake -DBUILD_SHARED_LIBS=OFF -B build
