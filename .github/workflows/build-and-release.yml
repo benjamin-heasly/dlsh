@@ -61,15 +61,15 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Create a platform-specific zip of libs.
+      - name: Create a platform-specific zip of libs and headers.
         run: |
-          cd /work/artifacts/lib
-          sudo zip dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip *.so *.a
+          cd /work/artifacts
+          sudo zip -r dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip .
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
         with:
           artifacts: /work/artifacts/lib/*.zip
-          body: libs for dlsh version ${{ github.ref_name }}
+          body: libs and headers for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
