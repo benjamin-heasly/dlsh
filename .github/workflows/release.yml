@@ -47,7 +47,7 @@ jobs:
           git checkout v2.4.4
           cmake -DBUILD_SHARED_LIBS=OFF -B build
           cmake --build build
-          cmake --install build
+          sudo cmake --install build
           cmake -DBUILD_SHARED_LIBS=ON -B build
           cmake --build build
           sudo cmake --install build
