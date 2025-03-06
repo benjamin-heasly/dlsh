@@ -80,14 +80,5 @@ target_link_libraries( dlsh ${LIBJANSSON} ${TCLLIB} ${PDFLIB} ${LZ4LIB} ${ZLIB} 
 
 target_link_libraries( dlsh-static ${LIBJANSSON} ${TCLLIB} ${PDFLIB} ${LZ4LIB} ${ZLIB} )
 
-set (CMAKE_INSTALL_PREFIX ../dlshell/dlshell.vfs/lib/dlsh)
-if (WIN32)
-INSTALL(TARGETS dlsh
-        LIBRARY DESTINATION "Windows NT/amd64"
-)
-elseif(APPLE)
-else ()
-INSTALL(TARGETS dlsh
-        LIBRARY DESTINATION "Linux/aarch64"
-)
-endif()
+INSTALL(TARGETS dlsh LIBRARY)
+INSTALL(TARGETS dlsh-static LIBRARY)

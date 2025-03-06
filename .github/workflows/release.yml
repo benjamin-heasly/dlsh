@@ -1,0 +1,71 @@
+name: Build and Release Libs
+
+on:
+  push:
+    tags:        
+      - '*'
+
+jobs:
+
+  release:
+
+    strategy:
+      matrix:
+        # Build on not-the-latest to keep dependency versions modest.
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+      - name: Set up a build environment.
+        run: |
+          sudo apt install -y build-essential cmake
+          sudo apt install -y zlib1g-dev liblz4-dev
+
+      - name: Install TCL 9 to the build environment.
+        run: |
+          git clone --depth=1 --branch core-9-0-1-rc https://github.com/tcltk/tcl.git
+          cd tcl/unix/
+          ./configure
+          make
+          sudo make install
+
+      - name: Install Jansson to the build environment.
+        run: |
+          git clone https://github.com/akheron/jansson.git
+          cd jansson/
+          git checkout v2.14
+          mkdir build/
+          cd build/
+          cmake ..
+          make
+          sudo make install
+
+      - name: Install Libharu to the build environment (static and dynamic libs both).
+        run: |
+          git https://github.com/libharu/libharu.git
+          cd libharu
+          git checkout v2.4.4
+          cmake -DBUILD_SHARED_LIBS=OFF -B build
+          cmake --build build
+          cmake --install build
+          cmake -DBUILD_SHARED_LIBS=ON -B build
+          cmake --build build
+          cmake --install build
+
+      - name: Check out our dlsh code for the current tag.
+        uses: actions/checkout@v4
+
+      - name: Install dlsh into an artifacts dir.
+        run: |
+          cmake -DCMAKE_INSTALL_PREFIX=/work/artifacts/ -B build
+          cmake --build build
+          cmake --install build
+
+      - name: Create a GitHub release for the current tag and artifacts.
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: /work/artifacts/*.so /work/artifacts/*.a
+          body: libs for dlsh version ${{ github.ref_name }}
+          generateReleaseNotes: true
