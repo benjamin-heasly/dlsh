@@ -20,6 +20,7 @@ jobs:
 
       - name: Set up a build environment.
         run: |
+          sudo apt update
           sudo apt install -y build-essential cmake
           sudo apt install -y zlib1g-dev liblz4-dev
 
