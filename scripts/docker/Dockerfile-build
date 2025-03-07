@@ -1,3 +1,9 @@
+# From the dserv repo root:
+#   docker build . -f scripts/docker/Dockerfile-build -t dlsh-build:local
+#
+# docker run --rm -ti dlsh-build:local ls -alth /work/package/lib
+# docker run --rm -ti dlsh-build:local ls -alth /work/package/include
+
 # This runs in an Ubuntu environment.
 FROM ubuntu:22.04
 
@@ -45,9 +51,3 @@ WORKDIR /work/dlsh/
 RUN cmake -DCMAKE_INSTALL_PREFIX=/work/package/ -B build \
   && cmake --build build \
   && cmake --install build
-
-
-# docker build . -t dlsh:local
-
-# docker run --rm -ti dlsh:local ls -alth /work/package/lib
-# docker run --rm -ti dlsh:local ls -alth /work/package/include
