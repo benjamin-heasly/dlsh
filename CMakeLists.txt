@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 
+if(NOT DEFINED PROJECT_VERSION)
+  set(PROJECT_VERSION 0.0.0)
+endif()
 project(dlsh VERSION ${PROJECT_VERSION})
 
 set(CMAKE_BUILD_TYPE Release)
