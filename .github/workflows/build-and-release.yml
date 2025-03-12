@@ -58,19 +58,14 @@ jobs:
 
       - name: Install dlsh into an artifacts dir.
         run: |
-          cmake -DCMAKE_INSTALL_PREFIX=/work/artifacts/ -B build
-          cmake --build build
-          sudo cmake --install build
-
-      - name: Create a platform-specific zip of libs and headers.
-        run: |
-          cd /work/artifacts
-          sudo zip -r dlsh-${{ runner.os }}-$(dpkg --print-architecture)-${{ github.ref_name }}.zip .
+          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build \
+          cmake --build build \
+          cpack -G DEB --config build/CPackConfig.cmake
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
         with:
-          artifacts: /work/artifacts/*.zip
+          artifacts: "*.deb"
           body: libs and headers for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
