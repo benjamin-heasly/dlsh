@@ -61,8 +61,8 @@ jobs:
 
       - name: Install dlsh into an artifacts dir.
         run: |
-          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build \
-          cmake --build build \
+          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build
+          cmake --build build
           cpack -G DEB --config build/CPackConfig.cmake
 
       - name: Create a GitHub release for the current tag and artifacts.
