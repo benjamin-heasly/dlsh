@@ -9,7 +9,7 @@ This repo uses [git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodu
 
 To clone this repo along with the submodules:
 
-```
+``` 
 git clone --recurse-submodules https://github.com/SheinbergLab/dlsh.git
 ```
 
