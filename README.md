@@ -1,7 +1,25 @@
 # dlsh
 
+## Git Submodules
 
-## Tags and Releases
+This repo uses [git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) to obtain source code for several dependencies (and specific commits/versions of each):
+ - [TCL 9](https://github.com/tcltk/tcl)
+ - [jansson](https://github.com/akheron/jansson) JSON
+ - [haru](https://github.com/libharu/libharu) PDF
+
+To clone this repo along with the submodules:
+
+```
+git clone --recurse-submodules https://github.com/SheinbergLab/dlsh.git
+```
+
+If you already have this repo and you want to clone or update the submodules:
+
+```
+git pull --recurse-submodules
+```
+
+## Tags and Releases with GitHub Actions
 
 This repo uses GitHub Actions to build dlsh whenever we push a new repo tag.
 The workflow might go like this:
