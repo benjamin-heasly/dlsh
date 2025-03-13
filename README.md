@@ -15,7 +15,7 @@ The workflow might go like this:
    - Annotated tags with `-a` can have metadata, including messages, which is nice.
    - `git tag -a 0.0.2 -m "Now with lasers."`
    - `git push --tags`
- - When the new tag is pused to GitHub, GitHub Actions will kick off a new build and release.
+ - When the new tag is pushed to GitHub, GitHub Actions will kick off a new build and release.
  - See workflow definition(s) like [build-and-release.yml](./.github/workflows/build-and-release.yml).
  - Follow workflow progress at the repo [Actions tab](https://github.com/benjamin-heasly/dlsh/actions).
  - See completed releases and build artifacts at the repo [Releases](https://github.com/benjamin-heasly/dlsh/releases).
