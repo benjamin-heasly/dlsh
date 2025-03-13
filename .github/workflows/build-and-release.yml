@@ -27,28 +27,28 @@ jobs:
           sudo apt install -y build-essential cmake
           sudo apt install -y zlib1g-dev liblz4-dev
 
+      - name: Check out our dlsh code for the current tag..
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
       - name: Install TCL 9 to the build environment.
         run: |
-          git clone --depth=1 --branch core-9-0-1-rc https://github.com/tcltk/tcl.git
-          cd tcl/unix/
+          cd deps/tcl/unix/
           ./configure
           make
           sudo make install
 
       - name: Install Jansson to the build environment.
         run: |
-          git clone https://github.com/akheron/jansson.git
-          cd jansson/
-          git checkout v2.14
+          cd deps/jansson/
           cmake -B build
           cmake --build build
           sudo cmake --install build
 
       - name: Install Libharu to the build environment (static and dynamic libs both).
         run: |
-          git clone https://github.com/libharu/libharu.git
-          cd libharu
-          git checkout v2.4.4
+          cd deps/libharu/
           cmake -DBUILD_SHARED_LIBS=OFF -B build
           cmake --build build
           sudo cmake --install build
@@ -56,10 +56,7 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Check out our dlsh code for the current tag.
-        uses: actions/checkout@v4
-
-      - name: Install dlsh into an artifacts dir.
+      - name: Install dlsh and package for release.
         run: |
           cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build
           cmake --build build
