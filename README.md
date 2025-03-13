@@ -3,9 +3,9 @@
 ## Git Submodules
 
 This repo uses [git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) to obtain source code for several dependencies (and specific commits/versions of each):
- - [TCL 9](https://github.com/tcltk/tcl)
+ - [tcl](https://github.com/tcltk/tcl) 9
  - [jansson](https://github.com/akheron/jansson) JSON
- - [haru](https://github.com/libharu/libharu) PDF
+ - [libharu](https://github.com/libharu/libharu) PDF
 
 To clone this repo along with the submodules:
 
