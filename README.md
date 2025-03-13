@@ -1,5 +1,8 @@
 # dlsh
 
+
+## Tags and Releases
+
 This repo uses GitHub Actions to build dlsh whenever we push a new repo tag.
 The workflow might go like this:
 
