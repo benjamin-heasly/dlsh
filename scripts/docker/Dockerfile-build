@@ -26,7 +26,6 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 
 # Add this repo and submodules.
 ADD . /work/dlsh/
-WORKDIR /work/dlsh/
 
 # Install TCL 9 to the build environment.
 WORKDIR /work/dlsh/deps/tcl/unix/
