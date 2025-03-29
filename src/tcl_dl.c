@@ -148,7 +148,7 @@ enum DL_GENERATOR    { DL_ZEROS, DL_ONES, DL_URAND, DL_ZRAND, DL_RANDFILL,
 enum DL_SERIES_MAKERS { DL_SERIES, DL_FROMTO };
 enum DL_CONVERT      { DL_FLOAT, DL_INT, DL_CHAR, DL_SHORT };
 enum DL_FINDERS      { DL_FIND, DL_FIND_ALL, DL_COUNT_OCCURENCES, 
-		       DL_FIND_PATTERNS };
+		       DL_FIND_PATTERNS, DL_FIND_INDICES };
 enum DL_COMPARATORS  { DL_EQUAL_TO, DL_LESS_THAN, DL_GREATER_THAN, 
 		       DL_LTE, DL_GTE, DL_AND, DL_OR, DL_MOD, 
 		       DL_NOT_EQUAL_TO, DL_STRINGMATCH, DL_ONEOF };
@@ -486,6 +486,8 @@ static TCL_COMMANDS DLcommands[] = {
 
   { "dl_find",             tclFindSublist,        (void *) DL_FIND,
       "find first occurence of a sublist within a source list" },
+  { "dl_findIndices",      tclFindSublist,        (void *) DL_FIND_INDICES,
+      "find indices of a search list in a source list" },
   { "dl_findAll",          tclFindSublist,        (void *) DL_FIND_ALL,
       "find all occurences of a sublist within a source list" },
   { "dl_findPatterns",     tclFindSublist,        (void *) DL_FIND_PATTERNS,
@@ -5279,7 +5281,7 @@ static int tclFindSublist (ClientData data, Tcl_Interp *interp,
   }
   if (tclFindDynList(interp, argv[1], &dl1) != TCL_OK) return TCL_ERROR;
 
-  if (mode == DL_FIND_PATTERNS) {
+  if (mode == DL_FIND_PATTERNS || mode == DL_FIND_INDICES) {
     if (tclFindDynList(interp, argv[2], &dl2) != TCL_OK) return TCL_ERROR;
   }
   else if (DYN_LIST_DATATYPE(dl1) == DF_LIST) {
@@ -5348,9 +5350,13 @@ static int tclFindSublist (ClientData data, Tcl_Interp *interp,
     }
   }
 
+  
   switch (mode) {
   case DL_FIND:
     result = dynListFindSublist(dl1, dl2);
+    break;
+  case DL_FIND_INDICES:
+    result = dynListFindIndices(dl1, dl2);
     break;
   case DL_FIND_ALL:
   case DL_FIND_PATTERNS:
@@ -5379,6 +5385,7 @@ static int tclFindSublist (ClientData data, Tcl_Interp *interp,
       dfuFreeDynList(result);
       return TCL_OK;
       break;
+    case DL_FIND_INDICES:
     case DL_FIND_PATTERNS:
     case DL_FIND_ALL:
     case DL_COUNT_OCCURENCES:

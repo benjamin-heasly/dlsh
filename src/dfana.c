@@ -26,6 +26,9 @@
 
 #include <utilc.h>
 
+#include "uthash.h"
+
+
 #ifdef WIN32
 #pragma warning (disable:4244)
 #pragma warning (disable:4305)
@@ -4453,6 +4456,275 @@ DYN_LIST *dynListFindSublistAll(DYN_LIST *source, DYN_LIST *pattern)
 
   return result;
 }
+
+/*
+ * dlFindIndices
+ *
+ *  Use hash tables (UT_Hash) https://troydhanson.github.io/uthash/
+ * to search a source list of ints or strings and return indices corresponding
+ * to locations of search items (which can be sublists)
+ */
+typedef struct {
+  int key;
+  int index;
+  UT_hash_handle hh;
+} HashEntryInt;
+
+typedef struct {
+  char *key;
+  int index;
+  UT_hash_handle hh;
+} HashEntryStr;
+
+void build_int_hash_table(DYN_LIST *table, HashEntryInt **hash_table)
+{
+  int table_size = DYN_LIST_N(table);
+
+  switch (DYN_LIST_DATATYPE(table)) {
+  case DF_LONG:
+    {
+      int *table_vals = (int *) DYN_LIST_VALS(table);
+      for (int i = 0; i < table_size; i++) {
+	HashEntryInt *entry = malloc(sizeof(HashEntryInt));
+	entry->key = table_vals[i];
+	entry->index = i;
+	HASH_ADD_INT(*hash_table, key, entry); // Add entry to the hash table
+      }
+    }
+    break;
+  case DF_SHORT:
+    {
+      short *table_vals = (short *) DYN_LIST_VALS(table);
+      for (int i = 0; i < table_size; i++) {
+	HashEntryInt *entry = malloc(sizeof(HashEntryInt));
+	entry->key = table_vals[i];
+	entry->index = i;
+	HASH_ADD_INT(*hash_table, key, entry); // Add entry to the hash table
+      }
+    }
+    break;
+  case DF_CHAR:
+    {
+      char *table_vals = (char *) DYN_LIST_VALS(table);
+      for (int i = 0; i < table_size; i++) {
+	HashEntryInt *entry = malloc(sizeof(HashEntryInt));
+	entry->key = table_vals[i];
+	entry->index = i;
+	HASH_ADD_INT(*hash_table, key, entry); // Add entry to the hash table
+      }
+    }
+    break;
+  }    
+}
+
+void build_str_hash_table(DYN_LIST *table, HashEntryStr **hash_table)
+{
+  int table_size = DYN_LIST_N(table);
+  char **table_vals = (char **) DYN_LIST_VALS(table);
+  for (int i = 0; i < table_size; i++) {
+    HashEntryStr *entry = malloc(sizeof(HashEntryStr));
+    entry->key = table_vals[i];
+    entry->index = i;
+    HASH_ADD_STR(*hash_table, key, entry); // Add entry to the hash table
+  }
+}
+
+void free_int_hash_table(HashEntryInt *hash_table) {
+  HashEntryInt *current_entry, *tmp;
+  HASH_ITER(hh, hash_table, current_entry, tmp) {
+    HASH_DEL(hash_table, current_entry); // Delete the entry from the hash table
+    free(current_entry);                // Free the memory
+  }
+}
+
+void free_str_hash_table(HashEntryStr *hash_table) {
+  HashEntryStr *current_entry, *tmp;
+  HASH_ITER(hh, hash_table, current_entry, tmp) {
+    HASH_DEL(hash_table, current_entry); // Delete the entry from the hash table
+    free(current_entry);                // Free the memory
+  }
+}
+
+DYN_LIST *doFindIndicesInt(HashEntryInt *hash_table, DYN_LIST *search_list)
+{
+  if (DYN_LIST_DATATYPE(search_list) != DF_LONG &&
+      DYN_LIST_DATATYPE(search_list) != DF_SHORT &&
+      DYN_LIST_DATATYPE(search_list) != DF_CHAR &&
+      DYN_LIST_DATATYPE(search_list) != DF_LIST) return NULL;
+
+  switch (DYN_LIST_DATATYPE(search_list)) {
+  case DF_LONG:
+    {
+      DYN_LIST *result = dfuCreateDynList(DF_LONG, DYN_LIST_N(search_list));
+      int search_size = DYN_LIST_N(search_list);
+      int *search_values = (int *) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < search_size; i++) {
+	HashEntryInt *entry;
+	HASH_FIND_INT(hash_table, &search_values[i], entry);
+	if (entry) {
+	  dfuAddDynListLong(result, entry->index);
+	} else {
+	  dfuAddDynListLong(result, -1);
+	}
+      }
+      return result;
+      break;
+    }
+  case DF_SHORT:
+    {
+      DYN_LIST *result = dfuCreateDynList(DF_LONG, DYN_LIST_N(search_list));
+      int search_size = DYN_LIST_N(search_list);
+      short *search_values = (short *) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < search_size; i++) {
+	HashEntryInt *entry;
+	int v = search_values[i];
+	HASH_FIND_INT(hash_table, &v, entry);
+	if (entry) {
+	  dfuAddDynListLong(result, entry->index);
+	} else {
+	  dfuAddDynListLong(result, -1);
+	}
+      }
+      return result;
+      break;
+    }
+  case DF_CHAR:
+    {
+      DYN_LIST *result = dfuCreateDynList(DF_LONG, DYN_LIST_N(search_list));
+      int search_size = DYN_LIST_N(search_list);
+      unsigned char *search_values = (unsigned char *) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < search_size; i++) {
+	HashEntryInt *entry;
+	int v = search_values[i];
+	HASH_FIND_INT(hash_table, &v, entry);
+	if (entry) {
+	  dfuAddDynListLong(result, entry->index);
+	} else {
+	  dfuAddDynListLong(result, -1);
+	}
+      }
+      return result;
+      break;
+    }
+  case DF_LIST:
+    {
+      DYN_LIST *newlist;
+      DYN_LIST *result = dfuCreateDynList(DF_LIST, DYN_LIST_N(search_list));
+      DYN_LIST **sublists = (DYN_LIST **) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < DYN_LIST_N(search_list); i++) {
+	newlist = doFindIndicesInt(hash_table, sublists[i]);
+	if (!newlist) {
+	  dfuFreeDynList(result);
+	  return NULL;
+	}
+	dfuMoveDynListList(result, newlist);
+      }
+      return result;
+      break;
+    }
+  default:
+    return NULL;
+  }
+}
+
+DYN_LIST *doFindIndicesStr(HashEntryStr *hash_table, DYN_LIST *search_list)
+{
+  if (DYN_LIST_DATATYPE(search_list) != DF_STRING &&
+      DYN_LIST_DATATYPE(search_list) != DF_LIST) return NULL;
+
+  switch (DYN_LIST_DATATYPE(search_list)) {
+  case DF_STRING:
+    {
+      DYN_LIST *result = dfuCreateDynList(DF_LONG, DYN_LIST_N(search_list));
+      int search_size = DYN_LIST_N(search_list);
+      char **search_values = (char **) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < search_size; i++) {
+	HashEntryStr *entry;
+	HASH_FIND_STR(hash_table, search_values[i], entry);
+	if (entry) {
+	  dfuAddDynListLong(result, entry->index);
+	} else {
+	  dfuAddDynListLong(result, -1);
+	}
+      }
+      return result;
+      break;
+    }
+  case DF_LIST:
+    {
+      DYN_LIST *newlist;
+      DYN_LIST *result = dfuCreateDynList(DF_LIST, DYN_LIST_N(search_list));
+      DYN_LIST **sublists = (DYN_LIST **) DYN_LIST_VALS(search_list);
+      for (int i = 0; i < DYN_LIST_N(search_list); i++) {
+	newlist = doFindIndicesStr(hash_table, sublists[i]);
+	if (!newlist) {
+	  dfuFreeDynList(result);
+	  return NULL;
+	}
+	dfuMoveDynListList(result, newlist);
+      }
+      return result;
+      break;
+    }
+  default:
+    return NULL;
+  }
+}
+
+DYN_LIST *dynListFindIndices(DYN_LIST *source_values, DYN_LIST *search_values)
+{
+  /* these must be initialized to zero for proper initialization! */
+  HashEntryInt *hash_table_int = NULL;
+  HashEntryStr *hash_table_str = NULL;
+  
+  DYN_LIST *result = NULL;
+
+  switch (DYN_LIST_DATATYPE(source_values)) {
+  case DF_CHAR:
+  case DF_SHORT:
+  case DF_LONG:
+    build_int_hash_table(source_values, &hash_table_int);
+    break;
+  case DF_STRING:
+    build_str_hash_table(source_values, &hash_table_str);
+    break;
+  default:
+    return NULL;
+  }
+
+  switch (DYN_LIST_DATATYPE(search_values)) {
+  case DF_CHAR:
+  case DF_SHORT:
+  case DF_LONG:
+    result = doFindIndicesInt(hash_table_int, search_values);
+    break;
+  case DF_STRING:
+    result = doFindIndicesStr(hash_table_str, search_values);
+    break;
+  case DF_LIST:
+    switch (DYN_LIST_DATATYPE(source_values)) {
+    case DF_CHAR:
+    case DF_SHORT:
+    case DF_LONG:
+      result = doFindIndicesInt(hash_table_int, search_values);
+      break;
+    case DF_STRING:
+      result = doFindIndicesStr(hash_table_str, search_values);
+      break;
+    default:
+      goto done;
+    }
+  default:
+    goto done;
+  }
+
+ done:
+  if (hash_table_int) free_int_hash_table(hash_table_int);
+  if (hash_table_str) free_str_hash_table(hash_table_str);
+  return result;
+  
+}
+
 
 DYN_LIST *dynListCountOccurences(DYN_LIST *source, DYN_LIST *pattern)
 {

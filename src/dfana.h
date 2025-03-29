@@ -114,6 +114,7 @@ DYN_LIST *dynListSeriesLongExclude(long start, long stop, long step);
 DYN_LIST *dynListSeriesLongT(long start, long stop, long step, int type);
 
 DYN_LIST *dynListFindSublist(DYN_LIST *source, DYN_LIST *pattern);
+DYN_LIST *dynListFindIndices(DYN_LIST *source, DYN_LIST *search);
 DYN_LIST *dynListFindSublistAll(DYN_LIST *source, DYN_LIST *pattern);
 DYN_LIST *dynListCountOccurences(DYN_LIST *source, DYN_LIST *pattern);
 DYN_LIST *dynListFillSparse(DYN_LIST *vals, DYN_LIST *times, DYN_LIST *range);
