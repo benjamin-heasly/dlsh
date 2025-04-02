@@ -2104,11 +2104,12 @@ static FILE *uncompress_file(char *filename, char *tempname)
 {
   FILE *fp;
   gzFile in;
+  int fd;
 #ifdef WIN32
   static char *tmpdir = "c:/windows/temp";
   char *fname;
 #else
-  static char fname[L_tmpnam];
+  char fname[] = "/tmp/dgXXXXXX";
 #endif
 
   if (!filename) return NULL;
@@ -2121,8 +2122,14 @@ static FILE *uncompress_file(char *filename, char *tempname)
 #ifdef WIN32
   fname = tempnam(tmpdir, "dg");
 #else
-  tmpnam(fname);
+  fd = mkstemp(fname);
+  if (fd == -1) {
+    strcpy(tempname, "error creating temp file for decompression");
+    return 0;
+  }
+  close(fd);
 #endif
+
   if (!(fp = fopen(fname,"wb"))) {
     strcpy(tempname, "error opening temp file for decompression");
     return 0;
@@ -2137,6 +2144,8 @@ static FILE *uncompress_file(char *filename, char *tempname)
 
 #ifdef WIN32
   free(fname);
+#else
+  unlink(fname);  /* Remove the temporary file when done */
 #endif
 
   return(fp);
@@ -3501,7 +3510,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
       DYN_GROUP_LIST(dg, groupid) = newlist;
     }
 
-    else if (tclFindDynList(interp, newname, NULL) == TCL_OK) {
+    else if (tclFindDynList(interp, newname, &newdl) == TCL_OK) {
       DYN_LIST *newlist = dfuCopyDynList(dl);
       DYN_LIST **parent;
       int index;
@@ -8705,15 +8714,8 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
      * If a dl_return'd dynlist is looked up, then set a trace to delete
      * it when the current procedure exits (as long as it doesn't already
      * have a trace)
-     */
-    /*
-     * This is actually a very *bad* way to track, because the variable
-     * can be deleted too soon.  Note that this code has now been experimentally
-     * moved to the returnDynList function, which traces at time of creation
-     * instead of waiting for first access
      *     DLS, 5/11
      */
-#if TRACE_RETURNS_AT_FIND
     if (name[0] == '>' && !(Tcl_GetVar(interp, name, 0))) {
       if (!Tcl_VarTraceInfo(interp, name, 0,
 			    (Tcl_VarTraceProc *) tclDeleteLocalDynList, 
@@ -8944,9 +8946,9 @@ static int tclFindSubDynListParent(Tcl_Interp *interp, char *dlname,
  * DESCRIPTION
  *    Looks for dynlist called name and takes into account group:listname
  * notation.  If dl is not null, it is assigned the pointer to the list.
- *    Also, if the a:b notation is used and a is not a group, a is
- * checked to see if it's a list of lists and if b is a number.  If so, and
- * if b is less than the number of lists in a, dl is set to a[b].
+ *    Also, if the a:b notation is used and a is not a group, a is checked to
+ * see if it's a list of lists and if b is a number.  If so, and if b is less
+ * than the number of lists in a, dl is set to a[b].
  *
  *****************************************************************************/
 
