@@ -8714,8 +8714,15 @@ int tclFindDynList(Tcl_Interp *interp, char *name, DYN_LIST **dl)
      * If a dl_return'd dynlist is looked up, then set a trace to delete
      * it when the current procedure exits (as long as it doesn't already
      * have a trace)
-     *     DLS, 5/11
      */
+     /*
+      * This is actually a very *bad* way to track, because the variable
+      * can be deleted too soon.  Note that this code has now been experimentally
+      * moved to the returnDynList function, which traces at time of creation
+      * instead of waiting for first access
+        DLS, 5/11
+     */
+#if TRACE_RETURNS_AT_FIND
     if (name[0] == '>' && !(Tcl_GetVar(interp, name, 0))) {
       if (!Tcl_VarTraceInfo(interp, name, 0,
 			    (Tcl_VarTraceProc *) tclDeleteLocalDynList, 
