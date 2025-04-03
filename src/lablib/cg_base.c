@@ -773,6 +773,14 @@ static int cgRGBcolor(ClientData clientData, Tcl_Interp *interp,
   return TCL_OK;
 }
 
+static int cgGetcolor(ClientData clientData, Tcl_Interp *interp,
+		      int argc, char *argv[])
+{
+  int oldcolor = getcolor();
+  Tcl_SetObjResult(interp, Tcl_NewIntObj(oldcolor));
+  return TCL_OK;
+}
+
 static int cgSetcolor(ClientData clientData, Tcl_Interp *interp,
 		      int argc, char *argv[])
 {
@@ -1131,6 +1139,9 @@ int Cgbase_Init(Tcl_Interp *interp)
 		    (ClientData) NULL,
 		    (Tcl_CmdDeleteProc *) NULL);
   Tcl_CreateCommand(interp, "setcolor", (Tcl_CmdProc *) cgSetcolor,
+		    (ClientData) NULL,
+		    (Tcl_CmdDeleteProc *) NULL);
+  Tcl_CreateCommand(interp, "getcolor", (Tcl_CmdProc *) cgGetcolor,
 		    (ClientData) NULL,
 		    (Tcl_CmdDeleteProc *) NULL);
   Tcl_CreateCommand(interp, "rgbcolor", (Tcl_CmdProc *) cgRGBcolor,

@@ -1255,7 +1255,7 @@ static void linutl(float x, float y)
    LHANDLER dl = f->dline;
    float xx, yy, error;
    float index, incx, incy, step, startx, starty, endx, endy;
-   
+
    if (!dp) return ;
    endx = xx = x;
    endy = yy = y;
