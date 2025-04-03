@@ -89,6 +89,10 @@ extern "C" int Flcgwin_Init(Tcl_Interp *interp)
     return TCL_ERROR;
   }
 
+  if (Tcl_PkgProvide(interp, "flcgwin", "1.0") != TCL_OK) {
+    return TCL_ERROR;
+  }
+
   Fl_Tabs *tabs =
     static_cast<Fl_Tabs *>(Tcl_GetAssocData(interp, "cgtabs", nullptr));
 
