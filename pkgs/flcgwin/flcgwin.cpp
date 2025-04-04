@@ -39,23 +39,28 @@ static int
 add_cgraph_tab_func(ClientData data, Tcl_Interp *interp,
 		int objc, Tcl_Obj *const objv[])
 {
-  if (objc != 2) {
-    Tcl_WrongNumArgs(interp, 1, objv, "name");
-    return (TCL_ERROR);
+  const char *label;
+
+  // Get next tab name from manager
+  std::string tab_name = CGTabManager::getInstance().getNextTabName();
+
+  if (objc > 1) {
+    label = Tcl_GetString(objv[1]);
+  }
+  else {
+    label = tab_name.c_str();
   }
 
   Fl_Tabs *tabs = (Fl_Tabs *) data;
   tabs->begin();
   
-  // Get next tab name from manager
-  std::string tab_name = CGTabManager::getInstance().getNextTabName();
-  
   auto cgwin_widget = new CGWin(interp, tabs->x(), tabs->y()+25,
-				tabs->w(), tabs->h()-25,
-				tab_name.c_str());
+				tabs->w(), tabs->h()-25);
+
   tabs->value(cgwin_widget);
   cgwin_widget->box(FL_NO_BOX);
   cgwin_widget->selection_color(FL_BACKGROUND_COLOR);
+  cgwin_widget->copy_label(label);
   cgwin_widget->labelfont(0);
   cgwin_widget->labelsize(14);
   cgwin_widget->labelcolor(FL_FOREGROUND_COLOR);
@@ -68,7 +73,8 @@ add_cgraph_tab_func(ClientData data, Tcl_Interp *interp,
   
   // Add to tab manager
   CGTabManager::getInstance().addCGWin(tab_name, cgwin_widget);
-  
+
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(tab_name.c_str(), -1));
   return TCL_OK;
 }
 
@@ -113,6 +119,48 @@ select_cgraph_tab_func(ClientData data, Tcl_Interp *interp,
   return TCL_ERROR;
 }
 
+static int
+delete_cgraph_tab_func(ClientData data, Tcl_Interp *interp,
+		int objc, Tcl_Obj *const objv[])
+{
+  if (objc != 2) {
+    Tcl_WrongNumArgs(interp, 1, objv, "name");
+    return (TCL_ERROR);
+  }
+
+  const char* tab_name = Tcl_GetString(objv[1]);
+  CGWin* widget = CGTabManager::getInstance().getCGWin(tab_name);
+  if (widget) {
+    Fl_Tabs* tabs = (Fl_Tabs*)data;
+    
+    // Remove from tab manager first
+    CGTabManager::getInstance().removeCGWin(tab_name);
+    
+    // Remove from tabs widget
+    tabs->remove(widget);
+    
+    // Make another tab current if exists
+    currentCG = nullptr;
+    for (int i = 0; i < tabs->children(); i++) {
+      if (tabs->child(i)) {
+        currentCG = (CGWin *) tabs->child(i);
+        gbSetGeventBuffer(currentCG->gb());
+        tabs->value(currentCG);
+        currentCG->redraw();
+        break;
+      }
+    }
+    
+    // Delete the widget
+    Fl::delete_widget(widget);
+    
+    return TCL_OK;
+  }
+
+  Tcl_SetResult(interp, "Tab not found", TCL_STATIC);
+  return TCL_ERROR;
+}
+
 // Extension initialization function
 extern "C" int Flcgwin_Init(Tcl_Interp *interp)
 {
@@ -134,6 +182,9 @@ extern "C" int Flcgwin_Init(Tcl_Interp *interp)
 		       (ClientData) tabs, NULL);
   Tcl_CreateObjCommand(interp,
 		       "cgSelectTab", (Tcl_ObjCmdProc *) select_cgraph_tab_func, 
+		       (ClientData) tabs, NULL);
+  Tcl_CreateObjCommand(interp,
+		       "cgDeleteTab", (Tcl_ObjCmdProc *) delete_cgraph_tab_func, 
 		       (ClientData) tabs, NULL);
   return TCL_OK;
 }
