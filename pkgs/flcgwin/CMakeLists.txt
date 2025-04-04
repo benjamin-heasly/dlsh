@@ -20,7 +20,7 @@ include_directories(${TCL_INCLUDE_DIR} .)
 ###############################
 # impro
 ###############################
-add_library(flcgwin SHARED flcgwin.cpp)
+add_library(flcgwin SHARED flcgwin.cpp cg_tab_manager.cpp)
 
 if(WIN32)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
