@@ -23,12 +23,11 @@ else()
   set (CMAKE_INSTALL_PREFIX /usr/local)
   find_library(LIBZ z)
   find_library(LIBLZ4 NAMES "liblz4.a")
-#  find_library(LIBDG NAMES "libdg.a")
+  find_library(LIBDG NAMES "libdg.a")
   find_library(LIBFLTK NAMES "libfltk.a")
   find_library(LIBFLTK_ZLIB NAMES "libfltk_z.a")
   set(LIBTCL "tcl9.0")
   set(LIBTCLSTUB "/usr/local/lib/libtclstub.a")
-  set(LIBDG dg)
 endif()
 
 
