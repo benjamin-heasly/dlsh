@@ -16,6 +16,7 @@
 #include <FL/Fl_Output.H>
 #include <FL/Fl_Box.H>
 #include <FL/fl_draw.H>
+#include <FL/fl_ask.H> // fl_message()
 
 #include "Fl_Console.hpp"
 
@@ -95,7 +96,8 @@ public:
   static void tab_close_cb(Fl_Widget* o, void* data)
   {
     if (Fl::callback_reason() == FL_REASON_CLOSED) {
-      auto parent = o->parent();
+      Fl_Tabs *parent = (Fl_Tabs *) o->parent();
+      parent->value(o);
       parent->remove(o);
       Fl::delete_widget(o);
       return;
@@ -106,7 +108,7 @@ public:
   {
     auto g = new Fl_Group(tabs->x()+5, tabs->y()+25, tabs->w()-5, tabs->h()-45);
     auto t = new DGTable(dg, g->x(), g->y(), g->w(), g->h());
-    tabs->value(t);
+    tabs->value(t);    
     g->end();
     g->callback(App::tab_close_cb, (void*) g);
     g->when(FL_WHEN_CLOSED);
@@ -116,12 +118,18 @@ public:
   
   int add_table(const char *filename)
   {
+    DYN_GROUP *dg = DGFile::read_dgz((char *) filename);
+    if (!dg) return 0;
     auto g = new Fl_Group(tabs->x()+5, tabs->y()+25, tabs->w()-5, tabs->h()-45);
-    auto t = new DGTable((char *) filename, g->x(), g->y(), g->w(), g->h());
-    g->end();
-    g->callback(App::tab_close_cb, (void*) g);
-    g->when(FL_WHEN_CLOSED);
-    g->label(DYN_GROUP_NAME(t->dg));
+    auto t = new DGTable(dg, g->x(), g->y(), g->w(), g->h());
+    if (t) {
+      tabs->value(t);    
+      g->end();
+      g->callback(App::tab_close_cb, (void*) g);
+      g->when(FL_WHEN_CLOSED);
+      g->label(DYN_GROUP_NAME(t->dg));
+    }
+    
     return 1;
   }
 
@@ -277,6 +285,51 @@ static int eval(char *command, void *clientData) {
   return result;
 }
 
+class DgViewer : public Fl_Tabs {
+  int dnd_inside;
+public:
+  // Ctor
+  DgViewer(int x,int y,int w,int h) : Fl_Tabs(x,y,w,h) {
+    dnd_inside = 0;
+  }
+  // Receiver event handler
+  int handle(int event) FL_OVERRIDE {
+    int ret = Fl_Tabs::handle(event);
+    int len;
+    switch ( event ) {
+      case FL_DND_ENTER:        // return(1) for this event to 'accept' dnd
+        dnd_inside = 1;         // status: inside the widget, accept drop
+        ret = 1;
+        break;
+      case FL_DND_DRAG:         // return(1) for this event to 'accept' dnd
+        ret = 1;
+        break;
+      case FL_DND_RELEASE:      // return(1) for this event to 'accept' the payload (drop)
+        if (dnd_inside) {
+          ret = 1;              // return(1) and expect FL_PASTE event to follow
+        } else {
+          ret = 0;              // return(0) to reject the DND payload (drop)
+        }
+        break;
+      case FL_PASTE:              // handle actual drop (paste) operation
+        len = Fl::event_length();
+        if (len && Fl::event_text()) {
+	  App *app = static_cast<App *>(user_data());
+	  begin();
+	  app->add_table(Fl::event_text());
+	  end();
+	}
+        ret = 1;
+        break;
+      case FL_DND_LEAVE:        // not strictly necessary to return(1) for this event
+        dnd_inside = 0;         // status: mouse is outside, don't accept drop
+        ret = 1;                // return(1) anyway..
+        break;
+    }
+    return(ret);
+  }
+};
+
 int main(int argc, char *argv[])
 {
   int w = 900, h = 600;
@@ -289,7 +342,7 @@ int main(int argc, char *argv[])
   // tile->init_size_range(30, 30); // all children's size shall be at least 30x30
   
   auto dgview = new Fl_Group{0, 30, 400, 320};
-  Fl_Tabs tabs{0, 30, 400, 320};
+  DgViewer tabs{0, 30, 400, 320};
   tabs.resizable(&tabs);
   tabs.end();
   dgview->end();
@@ -306,6 +359,8 @@ int main(int argc, char *argv[])
   
   App app(argc, argv, &tabs, term);
 
+  tabs.user_data(&app);
+  
 #ifdef ADD_EDITOR  
   auto tbuffer = new Fl_Text_Buffer;
   auto editor = new Fl_Text_Editor(0, 30, win.w(), 265);
