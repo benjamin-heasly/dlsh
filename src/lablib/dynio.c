@@ -262,7 +262,7 @@ int dgReadDynGroup(char *filename, DYN_GROUP *dg)
     }
   }
   
-  if (suffix = strrchr(filename, '.')) {
+  if ((suffix = strrchr(filename, '.'))) {
     if (strlen(suffix) == 4) {
       if ((suffix[1] == 'l' && suffix[2] == 'z' && suffix[3] == '4') ||
 	  (suffix[1] == 'L' && suffix[2] == 'Z' && suffix[3] == '4')) {
@@ -1974,7 +1974,7 @@ int dguFileToStruct(FILE *InFP, DYN_GROUP *dg)
   float version;
   
   if (!confirm_magic_number(InFP)) {
-    fprintf(stderr,"dgutils: file not recognized as dg format\n");
+    //    fprintf(stderr,"dgutils: file not recognized as dg format\n");
     return(0);
   }
   
