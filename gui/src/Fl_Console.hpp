@@ -1,6 +1,8 @@
 #include "linenoise-fltk.h"
 #include <iostream>
 #include <string>
+#include <cstdlib>
+
 
 typedef int (*PROCESS_CB)(char *str, void *clienData);
 
@@ -48,6 +50,36 @@ public:
     linenoiseHistoryLoad(&l_state, "history.txt"); /* Load the history at startup */
     return 0;
   }
+
+  // Copy selected text or current line to clipboard
+  void copy_to_clipboard() {
+    if (selection_text_len() > 0) {
+      // Get the selected text from the terminal
+      const char *selected_text = selection_text();
+      Fl::copy(selected_text, selection_text_len(), 1);
+      free((void *) selected_text);
+      clear_mouse_selection();
+      redraw();
+    }
+  }
+
+  // Paste from clipboard at current cursor position
+  void paste_from_clipboard() {
+    Fl::paste(*this, 1);
+  }
+
+  // Handle paste event
+  void handle_paste(const char* text) {
+    if (!text) return;
+    
+    // Insert each character from the pasted text
+    for (const char* p = text; *p; p++) {
+      if (*p != '\r' && *p != '\n') { // Skip newlines in pasted text
+        lnHandleCharacter(&l_state, *p);
+      }
+    }
+    redraw();
+  }
   
 };
 
@@ -68,6 +100,10 @@ Fl_Console::~Fl_Console(void) {
 int Fl_Console::handle(int e) {
   
   switch (e) {
+  case FL_PASTE:
+    handle_paste(Fl::event_text());
+    return 1;
+    
   case FL_KEYDOWN:
     {
       const char *keybuf = Fl::event_text();
@@ -86,49 +122,69 @@ int Fl_Console::handle(int e) {
       case FL_Control_L:
       case FL_Control_R:
       case FL_Caps_Lock:
+        return 0;
 
-	return 0;
+      case 'c':
+      case 'C':
+        if (Fl::event_state(FL_COMMAND)) {
+          copy_to_clipboard();
+          return 1;
+        }
+        lnHandleCharacter(&l_state, (char) lastkey);
+        redraw();
+        return 1;
+
+      case 'v':
+      case 'V':
+        if (Fl::event_state(FL_COMMAND)) {
+          paste_from_clipboard();
+          return 1;
+        }
+        lnHandleCharacter(&l_state, (char) lastkey);
+        redraw();
+        return 1;
+        
       case FL_Enter:
-	{
-	  int final_len = lnHandleCharacter(&l_state, (char) lastkey);
-	  append("\n");
-	  if (l_state.len) {
-	    linenoiseHistoryAdd(&l_state, buf); /* Add to the history. */
-	    linenoiseHistorySave(&l_state, "history.txt"); /* Save the history on disk. */
-	    do_callback(buf);
-	  }
-	  lnInitState(&l_state, buf, buflen, prompt.c_str());
-	  return 1;
-	}
-	break;
+        {
+          int final_len = lnHandleCharacter(&l_state, (char) lastkey);
+          append("\n");
+          if (l_state.len) {
+            linenoiseHistoryAdd(&l_state, buf); /* Add to the history. */
+            linenoiseHistorySave(&l_state, "history.txt"); /* Save the history on disk. */
+            do_callback(buf);
+          }
+          lnInitState(&l_state, buf, buflen, prompt.c_str());
+          return 1;
+        }
+        break;
       case FL_Left:
-	{
-	  lnHandleCharacter(&l_state, (char) CTRL_B);
-	  redraw();
-	  return 1;
-	}
+        {
+          lnHandleCharacter(&l_state, (char) CTRL_B);
+          redraw();
+          return 1;
+        }
       case FL_Right:
-	{
-	  lnHandleCharacter(&l_state, (char) CTRL_F);
-	  redraw();
-	  return 1;
-	}
+        {
+          lnHandleCharacter(&l_state, (char) CTRL_F);
+          redraw();
+          return 1;
+        }
       case FL_Up:
-	{
-	  lnHandleCharacter(&l_state, (char) CTRL_P);
-	  redraw();
-	  return 1;
-	}
+        {
+          lnHandleCharacter(&l_state, (char) CTRL_P);
+          redraw();
+          return 1;
+        }
       case FL_Down:
-	{
-	  lnHandleCharacter(&l_state, (char) CTRL_N);
-	  redraw();
-	  return 1;
-	}
+        {
+          lnHandleCharacter(&l_state, (char) CTRL_N);
+          redraw();
+          return 1;
+        }
       default:
-	lnHandleCharacter(&l_state, (char) lastkey);
-	redraw();
-	return 1;
+        lnHandleCharacter(&l_state, (char) lastkey);
+        redraw();
+        return 1;
       }
     }
   }
