@@ -287,18 +287,6 @@ int main(int argc, char *argv[])
 
   //  auto tile = new Fl_Tile{0, 30, win.w(), win.h()-30};
   // tile->init_size_range(30, 30); // all children's size shall be at least 30x30
-
-#ifdef EDITOR  
-  auto tbuffer = new Fl_Text_Buffer;
-  auto editor = new Fl_Text_Editor(0, 30, win.w(), 265);
-  editor->buffer(tbuffer);
-  editor->textfont(FL_COURIER);
-  editor->textsize(12);
-  editor->align(FL_ALIGN_CLIP);
-  editor->resizable(editor);
-  
-  tile->resizable(editor);
-#endif
   
   auto dgview = new Fl_Group{0, 30, 400, 320};
   Fl_Tabs tabs{0, 30, 400, 320};
@@ -318,22 +306,33 @@ int main(int argc, char *argv[])
   
   App app(argc, argv, &tabs, term);
 
+#ifdef ADD_EDITOR  
+  auto tbuffer = new Fl_Text_Buffer;
+  auto editor = new Fl_Text_Editor(0, 30, win.w(), 265);
+  editor->buffer(tbuffer);
+  editor->textfont(FL_COURIER);
+  editor->textsize(12);
+  editor->align(FL_ALIGN_CLIP);
+  editor->resizable(editor);
+  
+  tile->resizable(editor);
+#endif
+  
   auto cgview = new Fl_Group{400, 30, win.w()-400, 320};
   auto cgtabs = new Fl_Tabs{cgview->x(), cgview->y(), cgview->w(), cgview->h()};
   cgtabs->resizable(tabs);
   cgtabs->end();
   cgview->end();
   
-  Tcl_SetAssocData(app.interp->interp(), "cgtabs", NULL,
-		   static_cast<ClientData>(cgtabs));
-
   Fl_Group command_term{0, 350, win.w(), win.h()-350};
   command_term.add(term);
   command_term.end();
   //  tile->add(&command_term);
 
-
-  app.interp->eval("package require flcgwin; cgAddTab");
+  // Share the pointer to the tab widget so the flcgwin package can access
+  Tcl_SetAssocData(app.interp->interp(), "cgtabs", NULL,
+		   static_cast<ClientData>(cgtabs));
+  app.interp->eval("package require flcgwin; cgAddTab cgtabs");
  
   win.resizable(win);
   win.show();
