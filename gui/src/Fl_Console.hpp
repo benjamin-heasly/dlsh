@@ -51,16 +51,32 @@ public:
     return 0;
   }
 
+  std::string get_current_selection(void)
+  {
+    // Get selection
+    int srow,scol,erow,ecol;
+    std::string sel;
+    if (get_selection(srow,scol,erow,ecol)) {                // mouse selection exists?
+      // Walk entire selection from start to end
+      for (int row=srow; row<=erow; row++) {                 // walk rows of selection
+	const Utf8Char *u8c = u8c_ring_row(row);             // ptr to first character in row
+	int col_start = (row==srow) ? scol : 0;              // start row? start at scol
+	int col_end   = (row==erow) ? ecol : ring_cols();    // end row?   end at ecol
+	u8c += col_start;                                    // include col offset (if any)
+	for (int col=col_start; col<=col_end; col++,u8c++) { // walk columns
+	  sel += u8c->text_utf8();
+	}
+      }
+    }
+    return sel;
+  }
+  
   // Copy selected text or current line to clipboard
   void copy_to_clipboard() {
-    if (selection_text_len() > 0) {
-      // Get the selected text from the terminal
-      const char *selected_text = selection_text();
-      Fl::copy(selected_text, selection_text_len(), 1);
-      free((void *) selected_text);
-      clear_mouse_selection();
-      redraw();
-    }
+    std::string sel = get_current_selection();
+    Fl::copy(sel.c_str(), strlen(sel.c_str()), 1);
+    clear_mouse_selection();
+    redraw();
   }
 
   // Paste from clipboard at current cursor position
