@@ -4494,7 +4494,7 @@ Tcl_Obj *tclDynListToTclObj(Tcl_Interp *interp, DYN_LIST *dl)
 {
   int i;
 
-  if (!dl || DYN_LIST_N(dl) == 0) {
+  if (!dl) {
     return NULL;
   }
 
