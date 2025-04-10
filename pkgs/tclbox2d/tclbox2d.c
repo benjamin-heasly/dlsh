@@ -72,8 +72,9 @@ typedef struct Box2D_info {
 
 static int find_Box2D(Tcl_Interp *interp, char *name, BOX2D_WORLD **b2dw)
 {
-  BOX2D_INFO *b2info = (BOX2D_INFO *) Tcl_GetAssocData(interp,
-					   BOX2D_ASSOC_DATA_KEY, NULL);
+  BOX2D_INFO *b2info =
+    (BOX2D_INFO *) Tcl_GetAssocData(interp,
+				    BOX2D_ASSOC_DATA_KEY, NULL);
   BOX2D_WORLD *world;
   Tcl_HashEntry *entryPtr;
 
@@ -200,7 +201,8 @@ static int Box2DGetBodiesCmd (ClientData data, Tcl_Interp *interp,
 
   
   if (argc < 2) {
-    Tcl_AppendResult(interp, "usage: ", argv[0], " world [typemask]", (char *) NULL);
+    Tcl_AppendResult(interp, "usage: ", argv[0],
+		     " world [typemask]", (char *) NULL);
     return TCL_ERROR;
   }
 
@@ -286,14 +288,14 @@ static int Box2DAddWorld(Tcl_Interp *interp,
   strncpy(newworld->name, worldname, sizeof(newworld->name)-1); 
   entryPtr = Tcl_CreateHashEntry(&b2info->Box2DTable, worldname, &newentry);
   Tcl_SetHashValue(entryPtr, newworld);
-  Tcl_SetResult(interp, worldname, TCL_STATIC);
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(worldname, -1));
   return TCL_OK;
 }
 
 static int Box2DCreateWorldCmd(ClientData clientData, Tcl_Interp *interp,
 			       int objc, Tcl_Obj * const objv[])
 {
-  static char worldname[128];
+  char worldname[128];
   BOX2D_WORLD *bw;
   BOX2D_INFO *b2info = (BOX2D_INFO *) clientData;
   
@@ -499,12 +501,13 @@ static int Box2DCreateBoxCmd(ClientData clientData, Tcl_Interp *interp,
   b2CreatePolygonShape(bodyId, &shapeDef, &box);  
 
   if (!name || !strlen(name)) {
-    snprintf(userdata->name, sizeof(userdata->name), "body%d", bw->bodyCount++); 
+    snprintf(userdata->name, sizeof(userdata->name),
+	     "body%d", bw->bodyCount++); 
   }
   else {
     strncpy(userdata->name, name, sizeof(userdata->name));
   }
-
+  
   entryPtr = Tcl_CreateHashEntry(&bw->bodyTable, userdata->name, &newentry);
 
   /* the body is an opaque structure, so to hash create copy and add to table */
@@ -512,7 +515,7 @@ static int Box2DCreateBoxCmd(ClientData clientData, Tcl_Interp *interp,
   *body = bodyId;
   Tcl_SetHashValue(entryPtr, body);
 
-  Tcl_SetResult(interp, userdata->name, TCL_VOLATILE);
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(userdata->name, -1));
   return(TCL_OK);
 }
 
@@ -581,7 +584,7 @@ static int Box2DCreateCircleCmd(ClientData clientData, Tcl_Interp *interp,
   *body = bodyId;
   Tcl_SetHashValue(entryPtr, body);
 
-  Tcl_SetResult(interp, userdata->name, TCL_VOLATILE);
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(userdata->name, -1));
   return(TCL_OK);
 }
 
@@ -748,7 +751,7 @@ static int Box2DRevoluteJointCreateCmd(ClientData clientData, Tcl_Interp *interp
   *joint = jointID;
   Tcl_SetHashValue(entryPtr, joint);
   
-  Tcl_SetResult(interp, joint_name, TCL_VOLATILE);
+  Tcl_SetObjResult(interp, Tcl_NewStringObj(joint_name, -1));
   return(TCL_OK);
 }
 
