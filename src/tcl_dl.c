@@ -1061,7 +1061,7 @@ static int tclCreateDynGroup (ClientData data, Tcl_Interp *interp,
   if (!dlinfo) return TCL_ERROR;
   
   int increment = dlinfo->DefaultGroupIncrement;
-  static char groupname[64];
+  char groupname[64];
 
   if (argc > 1) {
     strncpy(groupname, argv[1], 63);
@@ -1124,13 +1124,13 @@ int tclPutGroup(Tcl_Interp *interp, DYN_GROUP *dg)
 static int tclDgTempName (ClientData data, Tcl_Interp *interp,
 			  int argc, char *argv[])
 {
-  static char groupname[64];
+  char groupname[64];
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
 
   sprintf(groupname, "group%d", dlinfo->dgCount++);
-  Tcl_SetResult(interp, groupname, TCL_STATIC);
+  Tcl_SetResult(interp, groupname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -1155,7 +1155,7 @@ static int tclCopyDynGroup (ClientData data, Tcl_Interp *interp,
 			    int argc, char *argv[])
 {
   DYN_GROUP *old, *new;
-  static char newname[64];
+  char newname[64];
   Tcl_HashEntry *entryPtr;
   int newentry;
 
@@ -1196,7 +1196,7 @@ static int tclCopyDynGroup (ClientData data, Tcl_Interp *interp,
   entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, newname, &newentry);
   Tcl_SetHashValue(entryPtr, new);
   
-  Tcl_SetResult(interp, newname, TCL_STATIC);
+  Tcl_SetResult(interp, newname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -1239,7 +1239,7 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
 
   /* Nothing to do since the names are the same...just fake like we did it */
   if (!strcmp(oldname, newname)) {
-    Tcl_SetResult(interp, newname, TCL_STATIC);
+    Tcl_SetResult(interp, newname, TCL_VOLATILE);
     return TCL_OK;
   }
 
@@ -1266,12 +1266,12 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
     entryPtr = Tcl_FindHashEntry(&dlinfo->dgTable, oldname);
     Tcl_DeleteHashEntry(entryPtr);
 
-    Tcl_SetResult(interp, newname, TCL_STATIC);
+    Tcl_SetResult(interp, newname, TCL_VOLATILE);
     return TCL_OK;
   }
   else {
     char *newcolon;		/* colon in newname */
-    static char resultname[128], groupname[48];
+    char resultname[128], groupname[48];
     strncpy(groupname, oldname, colon-oldname);
     groupname[colon-oldname] = 0;
     
@@ -1293,7 +1293,7 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
     /* If the first arg is a named list, rename it */
     if (tclFindDynList(interp, oldname, &dl) == TCL_OK) {
       strncpy(DYN_LIST_NAME(dl), newname, DYN_LIST_NAME_SIZE-1);
-      Tcl_SetResult(interp, resultname, TCL_STATIC);
+      Tcl_SetResult(interp, resultname, TCL_VOLATILE);
       return TCL_OK;
     }
     /* If the notation is group:number try number as a column selector */
@@ -1304,7 +1304,7 @@ static int tclRenameDynGroup (ClientData data, Tcl_Interp *interp,
 	if (id < DYN_GROUP_N(dg) && id >= 0) {
 	  strncpy(DYN_LIST_NAME(DYN_GROUP_LIST(dg,id)), newname, 
 		  DYN_LIST_NAME_SIZE-1);
-	  Tcl_SetResult(interp, resultname, TCL_STATIC);
+	  Tcl_SetResult(interp, resultname, TCL_VOLATILE);
 	  return TCL_OK;
 	}
 	Tcl_ResetResult(interp);
@@ -1355,7 +1355,7 @@ static int tclAppendDynGroup (ClientData data, Tcl_Interp *interp,
     return TCL_ERROR;
   }
   else {
-    Tcl_SetResult(interp, argv[1], TCL_STATIC);
+    Tcl_SetResult(interp, argv[1], TCL_VOLATILE);
     return TCL_OK;
   }
 }
@@ -1913,7 +1913,7 @@ static int tclDynGroupFromString(ClientData cdata, Tcl_Interp * interp,
   entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg), &newentry);
   Tcl_SetHashValue(entryPtr, dg);
   
-  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
+  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -2262,7 +2262,7 @@ static int tclReadDynGroup (ClientData data, Tcl_Interp *interp,
   entryPtr = Tcl_CreateHashEntry(&dlinfo->dgTable, DYN_GROUP_NAME(dg), &newentry);
   Tcl_SetHashValue(entryPtr, dg);
   
-  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
+  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -2371,7 +2371,7 @@ static int tclAddNewListDynGroup (ClientData data, Tcl_Interp *interp,
   if (!dlinfo) return TCL_ERROR;
   
   int datatype = DF_LONG, increment = dlinfo->DefaultListIncrement;
-  static char listname[64];
+  char listname[64];
 
   if (argc < 3) {
     Tcl_AppendResult(interp, "usage: ", argv[0],
@@ -2540,7 +2540,7 @@ static int tclResetDynGroup (ClientData data, Tcl_Interp *interp,
     dfuResetDynGroup(dg);
   }
 
-  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_STATIC);
+  Tcl_SetResult(interp, DYN_GROUP_NAME(dg), TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -2628,7 +2628,7 @@ static int tclSetFormat(ClientData data, Tcl_Interp *interp,
 		     (char *) NULL);
     return TCL_ERROR;
   }
-  Tcl_SetResult(interp, old, TCL_STATIC);
+  Tcl_SetResult(interp, old, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -3359,7 +3359,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
   int newentry, replace_grouplist = 0;
   DYN_LIST *dl, *newdl = NULL;
   char *newname, *oldname, *colon;
-  static char gname[DYN_LIST_NAME_SIZE];
+  char gname[DYN_LIST_NAME_SIZE];
   DYN_GROUP *dg;
   int groupid;
   
@@ -3377,7 +3377,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
 
   /* Nothing to do since the names are the same...just fake like we did it */
   if (!strcmp(oldname, newname)) {
-    Tcl_SetResult(interp, newname, TCL_STATIC);
+    Tcl_SetResult(interp, newname, TCL_VOLATILE);
     return TCL_OK;
   }
 
@@ -3427,7 +3427,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
 	else {
 	  dfuCopyDynGroupExistingList(dg, strchr(newname,':')+1, dl);
 	}
-	Tcl_SetResult(interp, newname, TCL_STATIC);
+	Tcl_SetResult(interp, newname, TCL_VOLATILE);
 	return TCL_OK;
       }
     }
@@ -3539,7 +3539,7 @@ static int tclSetDynList (ClientData data, Tcl_Interp *interp,
     }
   }
 
-  Tcl_SetResult(interp, newname, TCL_STATIC);
+  Tcl_SetResult(interp, newname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -3605,7 +3605,7 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
   int newentry;
   DYN_LIST *dl;
   char *varname, *val;
-  static char newname[256];
+  char newname[256];
 
   DLSHINFO *dlinfo = Tcl_GetAssocData(interp, DLSH_ASSOC_DATA_KEY, NULL);
   if (!dlinfo) return TCL_ERROR;
@@ -3678,7 +3678,7 @@ static int tclLocalDynList (ClientData data, Tcl_Interp *interp,
 	       (Tcl_VarTraceProc *) tclDeleteLocalDynList, 
 	       (ClientData) strdup(newname));
 
-  Tcl_SetResult(interp, newname, TCL_STATIC);
+  Tcl_SetResult(interp, newname, TCL_VOLATILE);
   return TCL_OK;
 }
 
@@ -3759,8 +3759,7 @@ static int tclReturnDynList (ClientData data, Tcl_Interp *interp,
     Tcl_Eval(interp, tracecmd);
   }
 
-
-  Tcl_SetResult(interp, newname, TCL_STATIC);
+  Tcl_SetResult(interp, newname, TCL_VOLATILE);
   return TCL_OK;
 }
 
