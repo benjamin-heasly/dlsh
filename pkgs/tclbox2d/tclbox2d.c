@@ -35,6 +35,7 @@ enum b2BodyType
  };
 */
 
+Tcl_Mutex Box2D_Mutex;		/* to handle multi threads */
 struct Box2D_world;		/* for circular reference */
 
 typedef struct Box2D_world {
@@ -88,7 +89,7 @@ static int find_Box2D(Tcl_Interp *interp, char *name, BOX2D_WORLD **b2dw)
     return TCL_OK;
   }
   else {
-    if (b2dw) {			/* If face was null, then don't set error */
+    if (b2dw) {
       Tcl_AppendResult(interp, "world \"", name, "\" not found", 
 		       (char *) NULL);
     }
@@ -310,7 +311,11 @@ static int Box2DCreateWorldCmd(ClientData clientData, Tcl_Interp *interp,
   b2Vec2 gravity = {bw->gravity.x, bw->gravity.y};
   b2WorldDef worldDef = b2DefaultWorldDef();
   worldDef.gravity = gravity;
+
+  /* b2CreateWorld() is not thread safe! */
+  Tcl_MutexLock(&Box2D_Mutex);
   b2WorldId worldId = b2CreateWorld(&worldDef);
+  Tcl_MutexUnlock(&Box2D_Mutex);
   
   bw->worldId = worldId;
 
