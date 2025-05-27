@@ -34,13 +34,10 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Install Libharu to the build environment (static and dynamic libs both).
+      - name: Install Libharu static lib to the build environment.
         run: |
           cd deps/libharu/
           cmake -DBUILD_SHARED_LIBS=OFF -B build
-          cmake --build build
-          sudo cmake --install build
-          cmake -DBUILD_SHARED_LIBS=ON -B build
           cmake --build build
           sudo cmake --install build
 
