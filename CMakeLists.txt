@@ -40,7 +40,7 @@ include_directories(${TCL_INCLUDE_DIR} src)
 # dlsh
 ###############################
 add_library(dlsh SHARED src/dfana.c src/tcl_dlg.c src/dfevt.c src/dlsh_pkg.c src/tcl_df.c src/tcl_dm.c src/dlarith.c src/dmana.c src/tcl_dl.c src/dgjson.c src/lablib/gbufutl.c src/lablib/gbuf.c src/lablib/cg_ps.c src/lablib/cg_base.c src/lablib/axes.c src/lablib/cgraph.c src/lablib/timer.c src/lablib/utilc_unix.c src/lablib/randvars.c src/lablib/prmutil.c src/lablib/dfutils.c src/lablib/df.c src/lablib/dynio.c src/lablib/rawapi.c src/lablib/lodepng.c src/lablib/lz4utils.c src/lablib/dslog.c )
-set_target_properties(dlsh PROPERTIES PUBLIC_HEADER "src/dfana.h;src/lablib/df.h;src/lablib/dynio.h;src/tcl_dl.h;src/lablib/cgraph.h;src/lablib/gbuf.h;")
+set_target_properties(dlsh PROPERTIES PUBLIC_HEADER "src/dfana.h;src/lablib/df.h;src/lablib/dynio.h;src/tcl_dl.h;src/lablib/cgraph.h;src/lablib/gbuf.h;src/lablib/utilc.h;")
 
 add_subdirectory( libdg )
 
@@ -60,8 +60,8 @@ if(WIN32)
     endif()
 elseif(APPLE)
     set(TCLLIB tclstub)
-    set(PDFLIB libhpdf.a)
     set(ZLIB z)
+    find_library(PDFLIB NAMES "libhpdf.a")
     find_library(LIBJANSSON NAMES "libjansson.a")
     find_library(LZ4LIB NAMES "liblz4.a")
     set(BUNDLE_LOAD "-dynamiclib")
