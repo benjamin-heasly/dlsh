@@ -13,7 +13,6 @@ include_directories( ${FLTK_INCLUDE_DIR} src )
 
 if(WIN32)
   link_directories( c:/usr/local/lib/$ENV{VSCMD_ARG_TGT_ARCH} )
-  set_target_properties(flcgwin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
   add_compile_options("/DFL_DLL")
   set(LIBZ zlibstatic.lib)
   set(LIBLZ4 liblz4_static.lib)
