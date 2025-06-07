@@ -11,8 +11,10 @@ private:
 public:
   int DlshAppInit(Tcl_Interp *interp)
   {
+#ifndef _WIN32
     setenv("TCLLIBPATH", "", 1);
-
+#endif
+    
     if (Tcl_Init(interp) == TCL_ERROR) return TCL_ERROR;
 
     Tcl_VarEval(interp, 
@@ -46,9 +48,12 @@ public:
     if (TclZipfs_Mount(_interp, "dlsh.zip", "app", NULL) != TCL_OK) {
       printf("error mounting zip from \"%s\"\n", argv[1]); 
     }
-#endif    
+#endif
+#ifdef _WIN32
+    TclZipfs_AppHook(&argc, (wchar_t ***) &argv);
+#else
     TclZipfs_AppHook(&argc, &argv);
-
+#endif
     /*
      * Invoke application-specific initialization.
      */

@@ -375,8 +375,6 @@ int main(int argc, char *argv[])
   
   auto cgview = new Fl_Group{400, 30, win.w()-400, 320};
   auto cgtabs = new Fl_Tabs{cgview->x(), cgview->y(), cgview->w(), cgview->h()};
-  cgtabs->resizable(tabs);
-  cgtabs->end();
   cgview->end();
   
   Fl_Group command_term{0, 350, win.w(), win.h()-350};
@@ -387,7 +385,7 @@ int main(int argc, char *argv[])
   // Share the pointer to the tab widget so the flcgwin package can access
   Tcl_SetAssocData(app.interp->interp(), "cgtabs", NULL,
 		   static_cast<ClientData>(cgtabs));
-  app.interp->eval("package require flcgwin; cgAddTab cgtabs");
+   app.interp->eval("package require flcgwin; cgAddTab cgtabs");
  
   win.resizable(win);
   win.show();

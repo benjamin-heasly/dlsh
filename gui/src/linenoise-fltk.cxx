@@ -120,7 +120,12 @@
 #define PROMPT_HDR "\x1b[1;37;49m"
 #define PROMPT_TLR "\x1b[0m"
 
+#ifndef _WIN32
 #define ATTR_WEAK __attribute__((weak))
+#else
+#define ATTR_WEAK
+#endif
+
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 // Dummy timeout functions for query of screen dimensions (to detect a dumb terminal)
@@ -252,19 +257,19 @@ static void lnShowCompletion(struct linenoiseState *ls)
  * structure as described in the structure definition. */
 static void completeLine(struct linenoiseState *ls)
 {
-    ls->lc = (linenoiseCompletions) {
-        0, NULL
-    };
-    linenoise_completion(ls->buf, &ls->lc);
-
-    if (ls->lc.len == 0) {
-        linenoiseBeep();
-        freeCompletions(&ls->lc);
-    } else {
-        ls->completion_idx = 0;
-        ls->mode = linenoiseState::ln_completion;
-        lnShowCompletion(ls);
-    }
+  ls->lc.len = 0;
+  ls->lc.cvec = NULL;
+  
+  linenoise_completion(ls->buf, &ls->lc);
+  
+  if (ls->lc.len == 0) {
+    linenoiseBeep();
+    freeCompletions(&ls->lc);
+  } else {
+    ls->completion_idx = 0;
+    ls->mode = linenoiseState::ln_completion;
+    lnShowCompletion(ls);
+  }
 }
 
 
