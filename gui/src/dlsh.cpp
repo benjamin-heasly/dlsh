@@ -19,6 +19,7 @@
 #include <FL/fl_ask.H> // fl_message()
 
 #include "Fl_Console.hpp"
+#include "TclEditor.h"
 
 #include <iostream>
 #include <vector>
@@ -36,7 +37,7 @@
 
 #include "dlfuncs.h"
 
-
+extern void configure_editor(TclEditor *editor, Fl_Text_Buffer *buffer);
 
 void menu_cb(Fl_Widget*, void*) {
 }
@@ -292,6 +293,7 @@ public:
   DgViewer(int x,int y,int w,int h) : Fl_Tabs(x,y,w,h) {
     dnd_inside = 0;
   }
+
   // Receiver event handler
   int handle(int event) FL_OVERRIDE {
     int ret = Fl_Tabs::handle(event);
@@ -343,19 +345,19 @@ int main(int argc, char *argv[])
   Fl_Menu_Bar* m = new Fl_Menu_Bar(0, 0, win.w(), 30);
   m->copy(menuitems, &w);
 
-  //  auto tile = new Fl_Tile{0, 30, win.w(), win.h()-30};
-  // tile->init_size_range(30, 30); // all children's size shall be at least 30x30
+  auto tile = new Fl_Tile{0, 30, win.w(), win.h()-30};
+  tile->init_size_range(30, 30); // all children's size shall be at least 30x30
   
   auto dgview = new Fl_Group{0, 30, 400, 320};
+  dgview->box(FL_FLAT_BOX);   
   DgViewer tabs{0, 30, 400, 320};
   tabs.resizable(&tabs);
   tabs.end();
   dgview->end();
-  //  tile->add(&tabs);
   dgview->resizable(&tabs);
 
   // Add a terminal to bottom of app window for scrolling history of status messages.
-  auto term = new Fl_Console(0, 350 ,win.w(), win.h()-350);
+  auto term = new Fl_Console(0, 350 ,win.w(), win.h()-350-200);
   term->ansi(true);  // enable use of "\033[32m"
   term->end();
   term->resizable(term);
@@ -366,25 +368,22 @@ int main(int argc, char *argv[])
 
   tabs.user_data(&app);
   
-#ifdef ADD_EDITOR  
-  auto tbuffer = new Fl_Text_Buffer;
-  auto editor = new Fl_Text_Editor(0, 30, win.w(), 265);
-  editor->buffer(tbuffer);
-  editor->textfont(FL_COURIER);
-  editor->textsize(12);
-  editor->align(FL_ALIGN_CLIP);
-  editor->resizable(editor);
-  
+  auto editor = new TclEditor(0, win.h()-200, win.w(), 200);
+  auto tbuffer = new Fl_Text_Buffer();
+
+  configure_editor(editor, tbuffer);
   tile->resizable(editor);
-#endif
   
   auto cgview = new Fl_Group{400, 30, win.w()-400, 320};
+  cgview->box(FL_FLAT_BOX);   
   auto cgtabs = new Fl_Tabs{cgview->x(), cgview->y(), cgview->w(), cgview->h()};
   cgview->end();
+
+  tile->end();
   
-  Fl_Group command_term{0, 350, win.w(), win.h()-350};
-  command_term.add(term);
-  command_term.end();
+  //  Fl_Group command_term{0, 350, win.w(), win.h()-350};
+  //  command_term.add(term);
+  //  command_term.end();
   //  tile->add(&command_term);
 
   // Share the pointer to the tab widget so the flcgwin package can access
