@@ -342,12 +342,16 @@ int main(int argc, char *argv[])
   int w = 900, h = 600;
   Fl_Double_Window win{w, h};
 
+  
+  auto g = new Fl_Group(0, 0, win.w(), win.h());
+  
   Fl_Menu_Bar* m = new Fl_Menu_Bar(0, 0, win.w(), 30);
   m->copy(menuitems, &w);
 
   auto tile = new Fl_Tile{0, 30, win.w(), win.h()-30};
+  g->resizable(tile);
   tile->init_size_range(30, 30); // all children's size shall be at least 30x30
-  
+
   auto dgview = new Fl_Group{0, 30, 400, 320};
   dgview->box(FL_FLAT_BOX);   
   DgViewer tabs{0, 30, 400, 320};
@@ -380,6 +384,7 @@ int main(int argc, char *argv[])
   cgview->end();
 
   tile->end();
+  g->end();
   
   //  Fl_Group command_term{0, 350, win.w(), win.h()-350};
   //  command_term.add(term);

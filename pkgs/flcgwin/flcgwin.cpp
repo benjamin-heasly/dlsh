@@ -138,6 +138,7 @@ add_cgraph_tab_func(ClientData data, Tcl_Interp *interp,
   cgwin_widget->callback(tab_close_cb, (void*) cgwin_widget);
   cgwin_widget->when(FL_WHEN_CLOSED);
   cgwin_widget->redraw();
+  tabs->resizable(cgwin_widget);
   tabs->end();
   
   // Add to tab manager
