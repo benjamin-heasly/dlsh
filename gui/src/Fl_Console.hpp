@@ -1,114 +1,106 @@
 #pragma once
 
-#include "linenoise-fltk.h"
+#include <FL/Fl_Terminal.H>
 #include <iostream>
 #include <string>
-#include <cstdlib>
 #include <vector>
+#include <fstream>
 
-typedef int (*PROCESS_CB)(char *str, void *clienData);
-
-class Fl_Console;
-extern Fl_Console* s_console_instance;  // Static instance for callback
+typedef int (*PROCESS_CB)(char *str, void *clientData);
 
 class Fl_Console : public Fl_Terminal {
-private:
-  int lastkey;
-  struct linenoiseState l_state;
-  char *buf;
-  int buflen;
-  std::string prompt;
-  PROCESS_CB process_cb;
-  void *process_cb_data;
-  std::vector<std::string> available_commands;  // Store your command list
-  
 public:
-  Fl_Console(int X,int Y,int W,int H, const char *L=0);
-  ~Fl_Console(void);
+    // Completion structure
+    struct Completions {
+        std::vector<std::string> items;
+        
+        void clear() { items.clear(); }
+        void add(const std::string& str) { items.push_back(str); }
+        size_t size() const { return items.size(); }
+        const std::string& operator[](size_t idx) const { return items[idx]; }
+        bool empty() const { return items.empty(); }
+    };
 
-  int handle(int e) FL_OVERRIDE;
-
-  void resize(int X,int Y,int W,int H) FL_OVERRIDE {
-    Fl_Terminal::resize(X,Y,W,H);
-    // could update cols here but doesn't seem to work?
-    // l_state.cols = display_columns();
-    //    std::cout << "cols: " << l_state.cols << " w: " << W << " fontsize: " << textsize() << std::endl;
-  }
-  
-  int getch(void) { return lastkey; }
-
-  void set_callback(PROCESS_CB cb, void *cbdata) {
-    process_cb = cb;
-    process_cb_data = cbdata;
-  }
-
-  int do_callback(char *str)
-  {
-    if (!process_cb) return 0;
-    return (process_cb(str, process_cb_data));
-  }
-  
-  int init_linenoise(void)
-  {
-    lnInitState(&l_state, buf, buflen, prompt.c_str());
-    l_state.cols = display_columns();
-    l_state.mode = linenoiseState::ln_read_regular;
-    l_state.smart_term_connected = true;  // Enable smart terminal features    
-    linenoiseHistoryLoad(&l_state, "history.txt"); /* Load the history at startup */
-    return 0;
-  }
-
-  std::string get_current_selection(void) {
-    int srow,scol,erow,ecol;
-    std::string sel;
-    if (get_selection(srow,scol,erow,ecol)) {
-      for (int row=srow; row<=erow; row++) {
-	const Utf8Char *u8c = u8c_ring_row(row);
-	int col_start = (row==srow) ? scol : 0;
-	int col_end   = (row==erow) ? ecol : ring_cols();
-	u8c += col_start;
-	for (int col=col_start; col<col_end; col++,u8c++) { // Changed <= to 
-	  sel += u8c->text_utf8();
-	}
-	if (row < erow) sel += '\n'; // Add newline between rows
-      }
-    }
-    return sel;
-  }  
-
-  void copy_to_clipboard() {
-    std::string sel = get_current_selection();
-    if (!sel.empty()) {
-      Fl::copy(sel.c_str(), sel.length(), 1);
-    }
-    clear_mouse_selection();
-    redraw();
-  }
-  
-  // Paste from clipboard at current cursor position
-  void paste_from_clipboard() {
-    Fl::paste(*this, 1);
-  }
-
-  void handle_paste(const char* text) {
-    if (!text) return;
+private:
+    // Line editing state
+    enum EditMode {
+        MODE_NORMAL = 0,
+        MODE_COMPLETION,
+        MODE_ESCAPE_SEQUENCE
+    };
     
-    // Debug: Print what we're trying to paste
-    std::cout << "Pasting: '" << text << "' (length: " << strlen(text) << ")" << std::endl;
+    EditMode mode;
+    std::string current_line;
+    size_t cursor_pos;
+    std::string prompt;
     
-    for (const char* p = text; *p; p++) {
-      if (*p != '\r' && *p != '\n') {
-	lnHandleCharacter(&l_state, *p);
-      }
-    }
-    redraw();
+    // Completion state
+    Completions completions;
+    size_t completion_index;
+    std::string original_line;  // Line before completion started
+    size_t original_cursor;     // Cursor before completion started
     
-  }
+    // Escape sequence state
+    std::string escape_sequence;
+    
+    // History
+    std::vector<std::string> history;
+    int history_index;  // -1 means not browsing history
+    size_t max_history_size;
+    std::string history_file;
+    
+    // Available commands for completion
+    std::vector<std::string> available_commands;
+    
+    // Callback
+    PROCESS_CB process_cb;
+    void *process_cb_data;
+    
+    // Internal methods
+    void refresh_line();
+    void start_completion();
+    void cycle_completion();
+    void accept_completion();
+    void cancel_completion();
+    void handle_escape_sequence(char c);
+    void add_to_history(const std::string& line);
+    void move_cursor_left();
+    void move_cursor_right();
+    void move_to_start();
+    void move_to_end();
+    void delete_char();
+    void backspace();
+    void clear_line();
+    void delete_word();
+    void history_prev();
+    void history_next();
+    void insert_char(char c);
+    void execute_line();
+    std::string get_current_word() const;
+    void reset_to_prompt();
 
-  // Method to update the command list from your backend
-  void update_command_list(const std::vector<std::string>& commands) {
-    available_commands = commands;
-  }
-  // Static completion callback function (required by linenoise)
-  static void completion_callback(const char *buf, linenoiseCompletions *lc);
+public:
+    Fl_Console(int X, int Y, int W, int H, const char *L = nullptr);
+    ~Fl_Console();
+
+    // FLTK overrides
+    int handle(int e) override;
+    void resize(int X, int Y, int W, int H) override;
+
+    // Console interface
+    void set_callback(PROCESS_CB cb, void *cbdata);
+    void set_prompt(const std::string& prompt_str);
+    void update_command_list(const std::vector<std::string>& commands);
+    void load_history(const std::string& filename);
+    void save_history(const std::string& filename);
+    void init_console();
+    
+    // Terminal interface  
+    void copy_to_clipboard();
+    void paste_from_clipboard();
+    void handle_paste(const char* text);
+    
+    // For compatibility with existing code
+    int getch() { return -1; } // Not used in integrated version
+    int do_callback(char *str);
 };

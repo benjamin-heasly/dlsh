@@ -366,15 +366,13 @@ int main(int argc, char *argv[])
   term->ansi(true);  // enable use of "\033[32m"
   term->end();
   term->resizable(term);
-
+  term->set_prompt("dlsh> ");
+  term->update_command_list({"print", "dg_view", "rect", "alarm", "help", "exit", "quit"});
+  term->init_console();
   G_tty = term;
   
   App app(argc, argv, &tabs, term);
 
-  // Set up command completion
-  std::vector<std::string> commands = {"print", "dg_view", "rect", "alarm", "help", "exit", "quit"};
-  term->update_command_list(commands);
-  
   tabs.user_data(&app);
   
   auto editor = new TclEditor(0, win.h()-200, win.w(), 200);
@@ -405,7 +403,6 @@ int main(int argc, char *argv[])
   win.resizable(win);
   win.show();
 
-  term->init_linenoise();
   term->set_callback(eval, &app);
 
   
