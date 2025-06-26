@@ -15,12 +15,12 @@
 
 #include "TclFormatter.h"
 
+typedef int (*PROCESS_CB)(char *str, void *clienData);
 
 class TclEditor;
 void handle_auto_indent(TclEditor* editor);
 static void format_editor_text_preserve_cursor(Fl_Text_Buffer* buffer, 
 					       TclEditor* editor);
-
 
 class TclEditor : public Fl_Text_Editor {
 private:
@@ -28,6 +28,8 @@ private:
   static TclEditor* menu_editor; // For static callbacks
   std::string kill_buffer; // Store killed text for yanking
   bool last_was_kill;      // Track if last command was a kill
+  PROCESS_CB process_cb;
+  void *process_cb_data;
   
  // Static callback functions for menu items
   static void cut_cb(Fl_Widget*, void* data) {
@@ -55,6 +57,11 @@ private:
     editor->kf_select_all(0, editor);
   }
   
+  static void eval_cb(Fl_Widget* w, void* data) {
+    TclEditor* editor = static_cast<TclEditor*>(data);
+    editor->handle_ctrl_enter();
+  }
+  
 public:
   int indent_size = 4;
   
@@ -62,6 +69,9 @@ public:
   Fl_Text_Buffer *stylebuf;
   
   TclEditor(int X, int Y, int W, int H, const char* l = 0) : Fl_Text_Editor(X, Y, W, H, l) {
+    process_cb = nullptr;
+    process_cb_data = nullptr;
+
     stylebuf = new Fl_Text_Buffer();
 
     // Create invisible menu button for context menu
@@ -74,6 +84,7 @@ public:
     context_menu->add("Paste", FL_CTRL+'v', paste_cb, this, FL_MENU_DIVIDER);
     context_menu->add("Select All", FL_CTRL+'a', select_all_cb, this, FL_MENU_DIVIDER);
     context_menu->add("Format", FL_META+'f', format_cb, this, 0);    
+    context_menu->add("Eval", FL_META+'e', eval_cb, this, 0);    
   }
 
   ~TclEditor() {
@@ -88,9 +99,15 @@ public:
       int shift = Fl::event_state() & FL_SHIFT;
       
       if (key == FL_Enter) {
-	//	handle_auto_indent(this);
-	handle_enter();
-	last_was_kill = false;
+	if (ctrl) {
+	  handle_ctrl_enter();
+	  last_was_kill = false;
+	}
+	else {
+	  //	handle_auto_indent(this);
+	  handle_enter();
+	  last_was_kill = false;
+	}
 	return 1;
       }
 
@@ -166,6 +183,48 @@ public:
     return Fl_Text_Editor::handle(event);
   }
 
+  void set_callback(PROCESS_CB cb, void *cbdata) {
+    process_cb = cb;
+    process_cb_data = cbdata;
+  }
+
+  int do_callback(char *str)
+  {
+    if (!process_cb) return 0;
+    return (process_cb(str, process_cb_data));
+  }
+  
+  void evaluate_text(const char *text)
+  {
+    do_callback((char *) text);
+  }
+	 
+  void handle_ctrl_enter(void) {
+    Fl_Text_Buffer* buffer = this->buffer();
+    if (!buffer) return;
+    
+    int start, end;
+    if (buffer->selection_position(&start, &end)) {
+      // There's a selection - evaluate it
+      char* selected_text = buffer->selection_text();
+      if (selected_text) {
+	evaluate_text(selected_text);
+	free(selected_text);
+      }
+    } else {
+      // No selection - evaluate current line
+      int cursor_pos = this->insert_position();
+      int line_start = buffer->line_start(cursor_pos);
+      int line_end = buffer->line_end(cursor_pos);
+      
+      char* line_text = buffer->text_range(line_start, line_end);
+      if (line_text) {
+	evaluate_text(line_text);
+	free(line_text);
+      }
+    }
+  }
+  
   void handle_tab() {
     // Get current cursor position
     int cursor_pos = insert_position();

@@ -109,7 +109,8 @@ public:
   {
     auto g = new Fl_Group(tabs->x()+5, tabs->y()+25, tabs->w()-5, tabs->h()-45);
     auto t = new DGTable(dg, g->x(), g->y(), g->w(), g->h());
-    tabs->value(t);    
+    tabs->value(t);
+    tabs->resizable(t);
     g->end();
     g->callback(App::tab_close_cb, (void*) g);
     g->when(FL_WHEN_CLOSED);
@@ -370,6 +371,10 @@ int main(int argc, char *argv[])
   
   App app(argc, argv, &tabs, term);
 
+  // Set up command completion
+  std::vector<std::string> commands = {"print", "dg_view", "rect", "alarm", "help", "exit", "quit"};
+  term->update_command_list(commands);
+  
   tabs.user_data(&app);
   
   auto editor = new TclEditor(0, win.h()-200, win.w(), 200);
@@ -377,6 +382,7 @@ int main(int argc, char *argv[])
 
   configure_editor(editor, tbuffer);
   tile->resizable(editor);
+  editor->set_callback(eval, &app);
   
   auto cgview = new Fl_Group{400, 30, win.w()-400, 320};
   cgview->box(FL_FLAT_BOX);   
@@ -402,6 +408,7 @@ int main(int argc, char *argv[])
   term->init_linenoise();
   term->set_callback(eval, &app);
 
+  
   return(Fl::run());
 }
 

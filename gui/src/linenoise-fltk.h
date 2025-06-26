@@ -161,7 +161,12 @@ extern "C" {
   void linenoiseRefreshEditor(struct linenoiseState *);
   void linenoiseUpdatePrompt(struct linenoiseState *l_state, const char *prompt);
   bool smartTerminalConnected(void);
-  
+
+  // Internal functions needed for completion handling
+  void freeCompletions(linenoiseCompletions *lc);
+  void refreshLine(struct linenoiseState *l);
+  void lnShowCompletion(struct linenoiseState *ls);
+  int lnCompletion(struct linenoiseState *ls);  
 #ifdef __cplusplus
 }
 #endif

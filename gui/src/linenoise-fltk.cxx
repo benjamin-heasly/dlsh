@@ -116,6 +116,9 @@
 #include <iostream>
 
 #include "linenoise-fltk.h"
+#include <FL/Fl.H>
+#include <FL/Fl_Terminal.H>
+#include "Fl_Console.hpp"
 
 #define PROMPT_HDR "\x1b[1;37;49m"
 #define PROMPT_TLR "\x1b[0m"
@@ -145,8 +148,10 @@ bool ATTR_WEAK linenoise_timeout_elapsed(void)
 
 void ATTR_WEAK linenoise_completion(const char *buf, linenoiseCompletions *lc)
 {
-    (void)buf;
-    (void)lc;
+  // Call the Fl_Console completion callback if available
+  if (s_console_instance) {
+    Fl_Console::completion_callback(buf, lc);
+  }
 }
 
 const char** ATTR_WEAK linenoise_hints(const char *buf)
@@ -155,7 +160,7 @@ const char** ATTR_WEAK linenoise_hints(const char *buf)
     return NULL;
 }
 
-static void refreshLine(struct linenoiseState *l);
+void refreshLine(struct linenoiseState *l);
 
 /* Debugging macro. */
 #if 0
@@ -213,7 +218,7 @@ static void linenoiseBeep(void)
 /* ============================== Completion ================================ */
 
 /* Free a list of completion option populated by linenoiseAddCompletion(). */
-static void freeCompletions(linenoiseCompletions *lc)
+void freeCompletions(linenoiseCompletions *lc)
 {
     size_t i;
 
@@ -228,7 +233,7 @@ static void freeCompletions(linenoiseCompletions *lc)
     lc->len = 0;
 }
 
-static void lnShowCompletion(struct linenoiseState *ls)
+void lnShowCompletion(struct linenoiseState *ls)
 {
     struct linenoiseState saved = *ls;
     /* Find next completion not identical with current line buffer */
@@ -561,7 +566,7 @@ static void refreshMultiLine(struct linenoiseState *l, bool showHints)
 
 /* Calls the two low level functions refreshSingleLine() or
  * refreshMultiLine() according to the selected mode. */
-static void refreshLine(struct linenoiseState *l)
+void refreshLine(struct linenoiseState *l)
 {
   if (l->mlmode) {
     refreshMultiLine(l, true);
@@ -923,7 +928,7 @@ int lnHandleCharacter(struct linenoiseState *l, char c)
     return -1;
 }
 
-static int lnCompletion(struct linenoiseState *ls)
+int lnCompletion(struct linenoiseState *ls)
 {
     int c = linenoise_getch();
     if (c < 0) {
@@ -939,22 +944,29 @@ static int lnCompletion(struct linenoiseState *ls)
         lnShowCompletion(ls);
         return -1;
     case 27: /* escape */
-        /* Re-show original buffer */
-        if (ls->completion_idx < ls->lc.len) {
-            refreshLine(ls);
-        }
-        break;
+        ls->mode = linenoiseState::ln_read_regular;
+        freeCompletions(&ls->lc);
+        refreshLine(ls);
+        return -1;
     default:
-        /* Update buffer and return */
+        /* Accept completion and continue with the character */
         if (ls->completion_idx < ls->lc.len) {
-            ls->len = ls->pos = (size_t)snprintf(ls->buf, ls->buflen, "%s", ls->lc.cvec[ls->completion_idx]);
+            const char* completion = ls->lc.cvec[ls->completion_idx];
+            
+            size_t completion_len = strlen(completion);
+            if (completion_len < ls->buflen) {
+                strcpy(ls->buf, completion);
+                ls->len = ls->pos = completion_len;
+            }
         }
-        break;
+        
+        ls->mode = linenoiseState::ln_read_regular;
+        freeCompletions(&ls->lc);
+        
+        refreshLine(ls);
+        
+        return lnHandleCharacter(ls, (char)c);
     }
-
-    ls->mode = linenoiseState::ln_read_regular;
-    freeCompletions(&ls->lc);
-    return lnHandleCharacter(ls, (char)c);
 }
 
 static int lnReadUserInput(struct linenoiseState *l)

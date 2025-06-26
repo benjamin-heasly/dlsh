@@ -1,10 +1,15 @@
+#pragma once
+
 #include "linenoise-fltk.h"
 #include <iostream>
 #include <string>
 #include <cstdlib>
-
+#include <vector>
 
 typedef int (*PROCESS_CB)(char *str, void *clienData);
+
+class Fl_Console;
+extern Fl_Console* s_console_instance;  // Static instance for callback
 
 class Fl_Console : public Fl_Terminal {
 private:
@@ -15,6 +20,7 @@ private:
   std::string prompt;
   PROCESS_CB process_cb;
   void *process_cb_data;
+  std::vector<std::string> available_commands;  // Store your command list
   
 public:
   Fl_Console(int X,int Y,int W,int H, const char *L=0);
@@ -47,164 +53,62 @@ public:
     lnInitState(&l_state, buf, buflen, prompt.c_str());
     l_state.cols = display_columns();
     l_state.mode = linenoiseState::ln_read_regular;
+    l_state.smart_term_connected = true;  // Enable smart terminal features    
     linenoiseHistoryLoad(&l_state, "history.txt"); /* Load the history at startup */
     return 0;
   }
 
-  std::string get_current_selection(void)
-  {
-    // Get selection
+  std::string get_current_selection(void) {
     int srow,scol,erow,ecol;
     std::string sel;
-    if (get_selection(srow,scol,erow,ecol)) {                // mouse selection exists?
-      // Walk entire selection from start to end
-      for (int row=srow; row<=erow; row++) {                 // walk rows of selection
-	const Utf8Char *u8c = u8c_ring_row(row);             // ptr to first character in row
-	int col_start = (row==srow) ? scol : 0;              // start row? start at scol
-	int col_end   = (row==erow) ? ecol : ring_cols();    // end row?   end at ecol
-	u8c += col_start;                                    // include col offset (if any)
-	for (int col=col_start; col<=col_end; col++,u8c++) { // walk columns
+    if (get_selection(srow,scol,erow,ecol)) {
+      for (int row=srow; row<=erow; row++) {
+	const Utf8Char *u8c = u8c_ring_row(row);
+	int col_start = (row==srow) ? scol : 0;
+	int col_end   = (row==erow) ? ecol : ring_cols();
+	u8c += col_start;
+	for (int col=col_start; col<col_end; col++,u8c++) { // Changed <= to 
 	  sel += u8c->text_utf8();
 	}
+	if (row < erow) sel += '\n'; // Add newline between rows
       }
     }
     return sel;
-  }
-  
-  // Copy selected text or current line to clipboard
+  }  
+
   void copy_to_clipboard() {
     std::string sel = get_current_selection();
-    Fl::copy(sel.c_str(), strlen(sel.c_str()), 1);
+    if (!sel.empty()) {
+      Fl::copy(sel.c_str(), sel.length(), 1);
+    }
     clear_mouse_selection();
     redraw();
   }
-
+  
   // Paste from clipboard at current cursor position
   void paste_from_clipboard() {
     Fl::paste(*this, 1);
   }
 
-  // Handle paste event
   void handle_paste(const char* text) {
     if (!text) return;
     
-    // Insert each character from the pasted text
+    // Debug: Print what we're trying to paste
+    std::cout << "Pasting: '" << text << "' (length: " << strlen(text) << ")" << std::endl;
+    
     for (const char* p = text; *p; p++) {
-      if (*p != '\r' && *p != '\n') { // Skip newlines in pasted text
-        lnHandleCharacter(&l_state, *p);
+      if (*p != '\r' && *p != '\n') {
+	lnHandleCharacter(&l_state, *p);
       }
     }
     redraw();
-  }
-  
-};
-
-Fl_Console::Fl_Console(int X,int Y,int W,int H, const char *L):
-  Fl_Terminal(X,Y,W,H,L) {
-  lastkey = -1;
-  buflen = 4096;
-  buf = new char[buflen];
-  prompt = std::string("dlsh> ");
-  process_cb = nullptr;
-  process_cb_data = nullptr;
-}
-
-Fl_Console::~Fl_Console(void) {
-  delete[] buf;
-}
-
-int Fl_Console::handle(int e) {
-  
-  switch (e) {
-  case FL_PASTE:
-    handle_paste(Fl::event_text());
-    return 1;
     
-  case FL_KEYDOWN:
-    {
-      const char *keybuf = Fl::event_text();
-      lastkey = keybuf[0];
-      //      std::cout << "keydown: " << Fl::event_key() << " alt_status (" << Fl::event_alt() << ")" << std::endl;
-
-      if (Fl::event_alt()) return 0;
-      
-      switch (Fl::event_key()) {
-      case FL_Meta_L:
-      case FL_Meta_R:
-      case FL_Alt_L:
-      case FL_Alt_R:
-      case FL_Shift_L:
-      case FL_Shift_R:
-      case FL_Control_L:
-      case FL_Control_R:
-      case FL_Caps_Lock:
-        return 0;
-
-      case 'c':
-      case 'C':
-        if (Fl::event_state(FL_COMMAND)) {
-          copy_to_clipboard();
-          return 1;
-        }
-        lnHandleCharacter(&l_state, (char) lastkey);
-        redraw();
-        return 1;
-
-      case 'v':
-      case 'V':
-        if (Fl::event_state(FL_COMMAND)) {
-          paste_from_clipboard();
-          return 1;
-        }
-        lnHandleCharacter(&l_state, (char) lastkey);
-        redraw();
-        return 1;
-        
-      case FL_Enter:
-        {
-          int final_len = lnHandleCharacter(&l_state, (char) lastkey);
-          append("\n");
-          if (l_state.len) {
-            linenoiseHistoryAdd(&l_state, buf); /* Add to the history. */
-            linenoiseHistorySave(&l_state, "history.txt"); /* Save the history on disk. */
-            do_callback(buf);
-          }
-          lnInitState(&l_state, buf, buflen, prompt.c_str());
-          return 1;
-        }
-        break;
-      case FL_Left:
-        {
-          lnHandleCharacter(&l_state, (char) CTRL_B);
-          redraw();
-          return 1;
-        }
-      case FL_Right:
-        {
-          lnHandleCharacter(&l_state, (char) CTRL_F);
-          redraw();
-          return 1;
-        }
-      case FL_Up:
-        {
-          lnHandleCharacter(&l_state, (char) CTRL_P);
-          redraw();
-          return 1;
-        }
-      case FL_Down:
-        {
-          lnHandleCharacter(&l_state, (char) CTRL_N);
-          redraw();
-          return 1;
-        }
-      default:
-        lnHandleCharacter(&l_state, (char) lastkey);
-        redraw();
-        return 1;
-      }
-    }
   }
-  return Fl_Terminal::handle(e);
-}
 
-
+  // Method to update the command list from your backend
+  void update_command_list(const std::vector<std::string>& commands) {
+    available_commands = commands;
+  }
+  // Static completion callback function (required by linenoise)
+  static void completion_callback(const char *buf, linenoiseCompletions *lc);
+};
