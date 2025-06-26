@@ -7086,6 +7086,136 @@ DYN_LIST *dynListIdiffLists(DYN_LIST *dl1, DYN_LIST *dl2, int autocorr)
   return(corrs);
 }
 
+DYN_LIST *dynListGradientList(DYN_LIST *dl)
+{
+  int i, length;
+  DYN_LIST *gradients;
+  
+  length = DYN_LIST_N(dl);
+  if (length <= 0) {
+    gradients = dfuCreateDynList(DYN_LIST_DATATYPE(dl), 4);
+    return(gradients);
+  }
+  
+  switch (DYN_LIST_DATATYPE(dl)) {
+  case DF_LONG:
+    {
+      int *vals = (int *) DYN_LIST_VALS(dl);
+      int *gs = (int *) calloc(length, sizeof(int));
+      int *g = gs;
+      
+      if (length == 1) {
+        *gs = 0;
+      } else {
+        // First point: forward difference
+        *gs++ = vals[1] - vals[0];
+        
+        // Middle points: central difference
+        for (i = 1; i < length - 1; i++) {
+          *gs++ = (vals[i+1] - vals[i-1]) / 2;
+        }
+        
+        // Last point: backward difference
+        *gs = vals[length-1] - vals[length-2];
+      }
+      gradients = dfuCreateDynListWithVals(DYN_LIST_DATATYPE(dl), length, g);
+    }
+    break;
+    
+  case DF_SHORT:
+    {
+      short *vals = (short *) DYN_LIST_VALS(dl);
+      short *gs = (short *) calloc(length, sizeof(short));
+      short *g = gs;
+      
+      if (length == 1) {
+        *gs = 0;
+      } else {
+        // First point: forward difference
+        *gs++ = vals[1] - vals[0];
+        
+        // Middle points: central difference
+        for (i = 1; i < length - 1; i++) {
+          *gs++ = (vals[i+1] - vals[i-1]) / 2;
+        }
+        
+        // Last point: backward difference
+        *gs = vals[length-1] - vals[length-2];
+      }
+      gradients = dfuCreateDynListWithVals(DYN_LIST_DATATYPE(dl), length, g);
+    }
+    break;
+    
+  case DF_FLOAT:
+    {
+      float *vals = (float *) DYN_LIST_VALS(dl);
+      float *gs = (float *) calloc(length, sizeof(float));
+      float *g = gs;
+      
+      if (length == 1) {
+        *gs = 0.0f;
+      } else {
+        // First point: forward difference
+        *gs++ = vals[1] - vals[0];
+        
+        // Middle points: central difference
+        for (i = 1; i < length - 1; i++) {
+          *gs++ = (vals[i+1] - vals[i-1]) / 2.0f;
+        }
+        
+        // Last point: backward difference
+        *gs = vals[length-1] - vals[length-2];
+      }
+      gradients = dfuCreateDynListWithVals(DYN_LIST_DATATYPE(dl), length, g);
+    }
+    break;
+    
+  case DF_CHAR:
+    {
+      char *vals = (char *) DYN_LIST_VALS(dl);
+      char *gs = (char *) calloc(length, sizeof(char));
+      char *g = gs;
+      
+      if (length == 1) {
+        *gs = 0;
+      } else {
+        // First point: forward difference
+        *gs++ = vals[1] - vals[0];
+        
+        // Middle points: central difference
+        for (i = 1; i < length - 1; i++) {
+          *gs++ = (vals[i+1] - vals[i-1]) / 2;
+        }
+        
+        // Last point: backward difference
+        *gs = vals[length-1] - vals[length-2];
+      }
+      gradients = dfuCreateDynListWithVals(DYN_LIST_DATATYPE(dl), length, g);
+    }
+    break;
+    
+  case DF_LIST:
+    {
+      DYN_LIST **vals = (DYN_LIST **) DYN_LIST_VALS(dl);
+      DYN_LIST *curgrad;
+      gradients = dfuCreateDynList(DYN_LIST_DATATYPE(dl), length);
+      for (i = 0; i < DYN_LIST_N(dl); i++) {
+        curgrad = dynListGradientList(vals[i]);
+        if (!curgrad) {
+          dfuFreeDynList(gradients);
+          return NULL;
+        }
+        dfuMoveDynListList(gradients, curgrad);
+      }
+    }
+    break;
+    
+  default:
+    return(NULL);
+  }
+  return(gradients);
+}
+
 DYN_LIST *dynListZeroCrossingList(DYN_LIST *dl)
 {
   int i, length;
