@@ -129,7 +129,7 @@ enum DL_LISTLIST_TYPES { DL_RECIPROCAL, DL_TRANSPOSE, DL_SORT, DL_UNIQUE,
 			   DL_LAST_INDEX_LIST, DL_PACK, DL_DEEP_PACK,
 			 DL_IDIFF, DL_SUBSHIFT, DL_UNPACK_LISTS,
 			 DL_RECODE_WITH_TIES, DL_BSHIFT, DL_BSHIFTCYCLE,
-                         DL_TRANSPOSE_AT, DL_CUT};
+                         DL_TRANSPOSE_AT, DL_CUT, DL_GRADIENT};
 enum DL_REPLACERS    { DL_REPLACE, DL_REPLACE_BY_INDEX };
 enum DL_REPEATERS    { DL_REPEAT, DL_REPLICATE, DL_REPEAT_ELTS };
 enum DL_PERMUTERS    { DL_PERMUTE, DL_REVERSE, DL_REVERSE_ALL, DL_BREVERSE };
@@ -574,6 +574,8 @@ static TCL_COMMANDS DLcommands[] = {
       "unpack the lowest level of a list of list of lists" },
   { "dl_diff",             tclListFromList,       (void *) DL_DIFF,
       "return lagged diff of a list" },
+  { "dl_gradient",         tclListFromList,       (void *) DL_GRADIENT,
+      "return gradients for elements of a list" },
   { "dl_zeroCrossings",    tclListFromList,       (void *) DL_ZERO_CROSSING,
       "find positive and negative zero crossings" },
   { "dl_sort",             tclListFromList,       (void *) DL_SORT,
@@ -6499,6 +6501,9 @@ static int tclListFromList (ClientData data, Tcl_Interp *interp,
 	newlist = dynListCutList(dl, dl2);
       }
     }
+    break;
+  case DL_GRADIENT:
+    newlist = dynListGradientList(dl);
     break;
   case DL_LENGTHS:
     newlist = dynListListLengths(dl);
