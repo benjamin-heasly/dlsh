@@ -277,6 +277,7 @@ DYN_LIST *dynListListCounts(DYN_LIST *dl, DYN_LIST *range);
 DYN_LIST *dynListListCount(DYN_LIST *dl, DYN_LIST *range);
 
 DYN_LIST *dynListDiffList(DYN_LIST *dl, int lag);
+DYN_LIST *dynListGradientList(DYN_LIST *dl);
 DYN_LIST *dynListIdiffLists(DYN_LIST *dl1, DYN_LIST *dl2, int autocorr);
 DYN_LIST *dynListZeroCrossingList(DYN_LIST *dl);
 
