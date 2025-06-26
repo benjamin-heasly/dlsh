@@ -34,7 +34,7 @@ endif()
 
 include_directories( ../src ../../dlsh/src ../../dlsh/src/lablib )
 link_directories( .. )
-add_executable( dlshell src/dlsh.cpp src/TclEditor.cxx src/linenoise-fltk.cxx src/dlfuncs.c )
+add_executable( dlshell src/dlsh.cpp src/TclEditor.cxx src/linenoise-fltk.cxx src/dlfuncs.c src/Fl_Console.cxx)
 
 if(WIN32)
   set_target_properties(dlshell PROPERTIES 
