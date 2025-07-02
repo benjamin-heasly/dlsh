@@ -1,0 +1,68 @@
+cmake_minimum_required(VERSION 3.14)
+
+project(points)
+
+set(CMAKE_BUILD_TYPE Release)
+
+add_definitions(-fPIC -DUSE_TCL_STUBS)
+
+if(WIN32)
+	include_directories(c:/usr/local/include)
+	link_directories(c:/usr/local/lib)
+elseif(APPLE)
+	add_definitions(-DMACOS -Dunix -DLINUX)
+	include_directories(/usr/local/include)
+	set(TCLLIB tclstub)
+	link_directories(/usr/local/lib)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "QNX")
+	include_directories(../local/include)
+	link_directories(../local/aarch64/lib)
+        set(LABLIB lab)
+	set(TCLLIB tclstub)
+	set(PDFLIB pdf)
+	set(LZ4LIB lz4)
+	set(ZLIB z)
+else()
+	add_definitions(-DLINUX)
+	include_directories(${APP_DIR} /usr/local/include)
+	link_directories(/usr/local/lib)
+	set(LIBDL dl)
+	set(TCLLIB tclstub)
+endif()
+
+include_directories(${TCL_INCLUDE_DIR} .)
+
+###############################
+# points
+###############################
+add_library(points SHARED points.c)
+
+set(DLSH dlsh)
+
+if(WIN32)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set(DLSH dlsh64.lib)
+	set(LAB lablib64.lib)
+	set(GLFW glfw3_64)
+	set(TCLLIB c:/usr/local/lib64/tclstub.lib)
+	set(CMAKE_EXE_MODULE_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:libcmt /NODEFAULTLIB:MSCVRT /def:${DEF_FILE}")
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+	set(DLSH dlsh.lib)
+	set(LAB lablib.lib)
+	set(GLFW glfw3dll)
+	set(TCLLIB tclstub.lib)
+	set(CMAKE_EXE_MODULE_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:libcmt /NODEFAULTLIB:MSCVRT /def:${DEF_FILE}")
+endif()
+elseif(APPLE)
+        set(DLSH dlsh)
+	set(TCLLIB tclstub)
+	set(BUNDLE_LOAD "-dynamiclib")
+else()
+	set(TCLLIB tclstub)
+	set(PDFLIB pdf)	
+	set(LZ4LIB lz4)
+	set(ZLIB z)
+endif()
+
+target_link_libraries(points ${DLSH} ${TCLLIB} ${ZLIB})
+
