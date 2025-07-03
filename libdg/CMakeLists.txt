@@ -4,17 +4,20 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Release)
 
 if(APPLE)
-	add_definitions(-fPIC -Dunix -DMACOS)
+  add_definitions(-fPIC -Dunix -DMACOS)
 elseif(WIN32)
 
 else()
-	set (CMAKE_INSTALL_PREFIX /usr/local)
-	add_definitions(-Dunix -DLINUX -fPIC)
+  set (CMAKE_INSTALL_PREFIX /usr/local)
+  add_definitions(-Dunix -DLINUX -fPIC)
 endif()
 
 project( dg VERSION 1.00 DESCRIPTION "dg io library")
 
-include_directories( ../src ../src/lablib )
+include_directories(../src ../src/lablib /usr/local/include)
+if(APPLE)
+  include_directories(/opt/homebrew/include/)
+endif()
 
 add_library(dg
   ../src/lablib/flipfuncs.c
