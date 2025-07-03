@@ -24,7 +24,7 @@ jobs:
       - name: Set up a build environment.
         run: |
           sudo apt update
-          sudo apt install -y build-essential cmake
+          sudo apt install -y build-essential cmake zip
           sudo apt install -y zlib1g-dev liblz4-dev
 
       - name: Check out our dlsh code for the current tag..
@@ -55,14 +55,19 @@ jobs:
 
       - name: Build dlsh and package for release.
         run: |
-          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build
+          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build -D CPACK_DEB_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="dlsh;dg"
           cmake --build build
           cpack -G DEB --config build/CPackConfig.cmake
+
+          cmake -B build -D CMAKE_INSTALL_PREFIX=dlsh-zip
+          cmake --install build --component dlsh-zip
+          cd dlsh-zip/
+          zip -r dlsh_${DLSH_VERSION}_$(dpkg --print-architecture).zip lib/
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "*.deb"
-          body: libs and headers for dlsh version ${{ github.ref_name }}
+          artifacts: "*.deb, dlsh-zip/*.zip"
+          body: libs, headers and dependencies for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
