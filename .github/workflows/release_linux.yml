@@ -62,7 +62,7 @@ jobs:
           cmake -B build -D CMAKE_INSTALL_PREFIX=dlsh-zip
           cmake --install build --component dlsh-zip
           cd dlsh-zip/
-          zip -r dlsh_${DLSH_VERSION}_$(dpkg --print-architecture).zip lib/
+          zip -r dlsh_${{ github.ref_name }}_$(dpkg --print-architecture).zip lib/
 
       - name: Create a GitHub release for the current tag and artifacts.
         uses: ncipollo/release-action@v1
