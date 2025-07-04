@@ -91,6 +91,44 @@ install(TARGETS dlsh LIBRARY COMPONENT dlsh)
 
 # Add our own tcl-only packages to dlsh.zip.
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/corrgram TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/graphing TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/pkgs/hex TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/mtspec TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/phase TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/rasts TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/robust TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/roc TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/selectivity TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/spec TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/spikes TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/stimcompose TYPE LIB COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/xCorr TYPE LIB COMPONENT dlsh-zip)
+
+# Add external tcl-only packages to dlsh.zip.
+set(BWIDGET_VERSION "bwidget-1-10-1")
+install(
+    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${BWIDGET_VERSION} https://github.com/tcltk/bwidget)"
+    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/bwidget/.git)"
+    COMPONENT dlsh-zip
+)
+set(TCLLIB_VERSION "tcllib-2-0")
+install(
+    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TCLLIB_VERSION} https://github.com/tcltk/tcllib.git)"
+    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/tcllib/.git)"
+    COMPONENT dlsh-zip
+)
+set(TKCON_VERSION "tkcon-2-8")
+install(
+    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TKCON_VERSION} https://github.com/bohagan1/TkCon.git)"
+    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/TkCon/.git)"
+    COMPONENT dlsh-zip
+)
+set(TKLIB_VERSION "tklib-0.9")
+install(
+    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TKLIB_VERSION} https://github.com/tcltk/tklib.git)"
+    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/tklib/.git)"
+    COMPONENT dlsh-zip
+)
 
 include(InstallRequiredSystemLibraries)
 
