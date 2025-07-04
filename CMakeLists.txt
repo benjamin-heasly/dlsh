@@ -105,28 +105,39 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/stimcompose TYPE LIB COMPONENT d
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/xCorr TYPE LIB COMPONENT dlsh-zip)
 
 # Add external tcl-only packages to dlsh.zip.
-set(BWIDGET_VERSION "bwidget-1-10-1")
-install(
-    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${BWIDGET_VERSION} https://github.com/tcltk/bwidget)"
-    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/bwidget/.git)"
-    COMPONENT dlsh-zip
-)
+# tcllib and tklib use a standard configure/make pattern.
 set(TCLLIB_VERSION "tcllib-2-0")
 install(
-    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TCLLIB_VERSION} https://github.com/tcltk/tcllib.git)"
-    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/tcllib/.git)"
-    COMPONENT dlsh-zip
-)
-set(TKCON_VERSION "tkcon-2-8")
-install(
-    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TKCON_VERSION} https://github.com/bohagan1/TkCon.git)"
-    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/TkCon/.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TCLLIB_VERSION} https://github.com/tcltk/tcllib.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tcllib COMMAND ./configure --prefix=${CMAKE_INSTALL_PREFIX})"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tcllib COMMAND make install-libraries)"
     COMPONENT dlsh-zip
 )
 set(TKLIB_VERSION "tklib-0.9")
 install(
-    CODE "execute_process(COMMAND git -C ${CMAKE_INSTALL_PREFIX}/lib clone --depth 1 --branch ${TKLIB_VERSION} https://github.com/tcltk/tklib.git)"
-    CODE "execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/lib/tklib/.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TKLIB_VERSION} https://github.com/tcltk/tklib.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tklib COMMAND ./configure --prefix=${CMAKE_INSTALL_PREFIX})"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tklib COMMAND make install-libraries)"
+    COMPONENT dlsh-zip
+)
+# TkCon is pure tcl, but the official pkgIndex.tcl comes from a template as pkgIndex.tcl.in.
+# We can run configure/make to produce the pkgIndex.tcl we need.
+# Annoyingly, configure fails without tk-dev installed.
+# And we still have to manually copy the files we need!
+set(TKCON_VERSION "tkcon-2-8")
+install(
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TKCON_VERSION} https://github.com/bohagan1/TkCon.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/TkCon COMMAND ./configure && make)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib COMMAND mkdir -p ${TKCON_VERSION})"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${TKCON_VERSION} COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/pkgIndex.tcl .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${TKCON_VERSION} COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/tkcon.tcl .)"
+    COMPONENT dlsh-zip
+)
+# bwidget is just tcl files that we copy -- and we don't need the .git history.
+set(BWIDGET_VERSION "bwidget-1-10-1")
+install(
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib COMMAND git clone --depth 1 --branch ${BWIDGET_VERSION} https://github.com/tcltk/bwidget ${BWIDGET_VERSION})"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${BWIDGET_VERSION} COMMAND rm -rf .git/)"
     COMPONENT dlsh-zip
 )
 
