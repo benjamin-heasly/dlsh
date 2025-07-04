@@ -104,6 +104,11 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/spikes TYPE LIB COMPONENT dlsh-z
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/stimcompose TYPE LIB COMPONENT dlsh-zip)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/local/xCorr TYPE LIB COMPONENT dlsh-zip)
 
+if(DEFINED DLSH_DEPENDENCIES)
+    # Add our non-public dependencies to dlsh.zip
+    install(DIRECTORY ${DLSH_DEPENDENCIES}/mclistbox-1.03 TYPE LIB COMPONENT dlsh-zip)
+endif()
+
 # Add external tcl-only packages to dlsh.zip.
 # tcllib and tklib use a standard configure/make pattern.
 set(TCLLIB_VERSION "tcllib-2-0")
