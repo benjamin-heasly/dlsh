@@ -146,6 +146,16 @@ install(
     COMPONENT dlsh-zip
 )
 
+# Add external tcl-plus-c packages to dlsh.zip.
+set(SQLITE_VERSION "version-3.50.2")
+install(
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${SQLITE_VERSION} https://github.com/sqlite/sqlite.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/sqlite COMMAND ./configure --enable-all)"
+    CODE "set(ENV{TCLLIBPATH} ${CMAKE_INSTALL_PREFIX}/lib)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/sqlite COMMAND make tclextension-install)"
+    COMPONENT dlsh-zip
+)
+
 include(InstallRequiredSystemLibraries)
 
 if(WIN32)
