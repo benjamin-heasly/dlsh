@@ -155,6 +155,15 @@ install(
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/sqlite COMMAND make tclextension-install)"
     COMPONENT dlsh-zip
 )
+set(YAJLTCL_VERSION "v1.8.1")
+install(
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${YAJLTCL_VERSION} https://github.com/flightaware/yajl-tcl.git)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND autoconf)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND ./configure --exec_prefix=${CMAKE_INSTALL_PREFIX})"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND make)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND make install)"
+    COMPONENT dlsh-zip
+)
 
 include(InstallRequiredSystemLibraries)
 

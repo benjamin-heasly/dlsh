@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y build-essential cmake zip
-          sudo apt install -y zlib1g-dev liblz4-dev tk-dev
+          sudo apt install -y zlib1g-dev liblz4-dev tk-dev libyajl-dev
 
       - name: Check out our dlsh code for the current tag..
         uses: actions/checkout@v4
