@@ -53,4 +53,4 @@ else()
 endif()
 
 include(CPack)
-cpack_add_component(dg REQUIRED)
+cpack_add_component(dg)
