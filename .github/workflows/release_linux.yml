@@ -62,7 +62,7 @@ jobs:
 
       - name: Build dlsh and package for release.
         run: |
-          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build -D CPACK_DEB_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="dlsh;dg"
+          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build -D CPACK_DEB_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="dlsh;dg" -D DLSH_DEPENDENCIES=/home/ninjaben/codin/dlsh-dependencies
           cmake --build build
           cpack -G DEB --config build/CPackConfig.cmake
 

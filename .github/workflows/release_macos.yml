@@ -41,6 +41,13 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
+      - name: Checkout dependencies not available from public repos
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/dlsh-dependencies
+          token: ${{ secrets.DLSH_DEPENDENCIES_TOKEN }}
+          path: deps/dlsh-dependencies
+
       - name: Set up a keychain for Apple code signing.
         env:
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -78,7 +85,7 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           INSTALLLER_CERT_ID: ${{ secrets.APPLE_INSTALLLER_CERT_ID }}
         run: |
-          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }}
+          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=/home/ninjaben/codin/dlsh-dependencies
           cmake --build build --config Release
           cpack -G productbuild --config build/CPackConfig.cmake
           productsign --sign "$INSTALLLER_CERT_ID" dlsh-${{ github.ref_name }}-Darwin.pkg dlsh-${{ github.ref_name }}-Darwin-signed.pkg
@@ -86,6 +93,13 @@ jobs:
           xcrun notarytool store-credentials --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" "dlsh-signing"
           xcrun notarytool submit dlsh-${{ github.ref_name }}-Darwin-signed.pkg --keychain-profile "dlsh-signing" --wait
           xcrun stapler staple dlsh-${{ github.ref_name }}-Darwin-signed.pkg
+
+          # TODO install and zip dlsh.zip
+          # cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D CMAKE_INSTALL_PREFIX=build/dlsh-zip -D DLSH_DEPENDENCIES=deps/dlsh-dependencies
+          # cmake --install build --component dlsh-zip
+          # cd build/dlsh-zip/
+          # zip -r dlsh-${{ github.ref_name }}-Linux-$(dpkg --print-architecture).zip lib/
+
 
       - name: Create a GitHub release for the current tag and package.
         uses: ncipollo/release-action@v1
