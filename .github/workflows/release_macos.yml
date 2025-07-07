@@ -85,7 +85,7 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           INSTALLLER_CERT_ID: ${{ secrets.APPLE_INSTALLLER_CERT_ID }}
         run: |
-          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=deps/dlsh-dependencies
+          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies
           cmake --build build --config Release
           cpack -G productbuild --config build/CPackConfig.cmake
           productsign --sign "$INSTALLLER_CERT_ID" dlsh-${{ github.ref_name }}-Darwin.pkg dlsh-${{ github.ref_name }}-Darwin-signed.pkg
@@ -95,7 +95,7 @@ jobs:
           xcrun stapler staple dlsh-${{ github.ref_name }}-Darwin-signed.pkg
 
           # TODO install and zip dlsh.zip
-          # cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D CMAKE_INSTALL_PREFIX=build/dlsh-zip -D DLSH_DEPENDENCIES=deps/dlsh-dependencies
+          # cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D CMAKE_INSTALL_PREFIX=build/dlsh-zip -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies
           # cmake --install build --component dlsh-zip
           # cd build/dlsh-zip/
           # zip -r dlsh-${{ github.ref_name }}-Linux-$(dpkg --print-architecture).zip lib/
