@@ -12,3 +12,4 @@ deps/sqlite/
 deps/tcllib/
 deps/tklib/
 deps/yajl-tcl/
+deps/dlsh-dependencies/
