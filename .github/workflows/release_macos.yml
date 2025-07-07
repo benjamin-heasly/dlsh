@@ -85,7 +85,7 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           INSTALLLER_CERT_ID: ${{ secrets.APPLE_INSTALLLER_CERT_ID }}
         run: |
-          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=/home/ninjaben/codin/dlsh-dependencies
+          cmake -B build -G Xcode -D CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM="$TEAM_ID" -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=deps/dlsh-dependencies
           cmake --build build --config Release
           cpack -G productbuild --config build/CPackConfig.cmake
           productsign --sign "$INSTALLLER_CERT_ID" dlsh-${{ github.ref_name }}-Darwin.pkg dlsh-${{ github.ref_name }}-Darwin-signed.pkg
