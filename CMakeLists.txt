@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 add_subdirectory( libdg )
-add_subdirectory( dlsh-zip )
+add_subdirectory( pkgs )
 
 if(NOT DEFINED PROJECT_VERSION)
   set(PROJECT_VERSION 0.0.0)

@@ -6,3 +6,9 @@ pkgtest/
 *.pkg
 *.deb
 *.zip
+
+deps/TkCon/
+deps/sqlite/
+deps/tcllib/
+deps/tklib/
+deps/yajl-tcl/
