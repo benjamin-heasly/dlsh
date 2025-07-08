@@ -115,6 +115,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/tclbox2d)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/dbscan)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/dslog)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/dtw)
+add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/flcgwin)
 
 #
 # Add dlsh itself to dlsh.zip

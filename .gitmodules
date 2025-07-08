@@ -38,3 +38,6 @@
 	path = deps/box2d
 	url = https://github.com/erincatto/box2d.git
     ignore = untracked
+[submodule "deps/fltk"]
+	path = deps/fltk
+	url = https://github.com/fltk/fltk.git

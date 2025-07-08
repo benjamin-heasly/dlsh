@@ -49,6 +49,13 @@ jobs:
           cmake --build build --parallel
           sudo cmake --install build
 
+      - name: Install FLTK GUI framework into the build environment.
+        run: |
+          cd deps/fltk/
+          cmake -B build
+          cmake --build build
+          sudo cmake --install build
+
       - name: Checkout dependencies not available from public repos
         uses: actions/checkout@v4
         with:
