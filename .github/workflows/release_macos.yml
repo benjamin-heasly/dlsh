@@ -20,7 +20,7 @@ jobs:
       - name: Install cmake build tool and dependencies lz4 and tcl9.0.
         run: |
           brew update
-          brew install cmake lz4 tcl-tk@9
+          brew install cmake lz4 tcl-tk@9 libpq
 
       - name: Check out our code
         uses: actions/checkout@v4

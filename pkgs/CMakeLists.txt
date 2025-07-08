@@ -119,6 +119,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/flcgwin)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/impro)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/mdns)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/points)
+add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/postgres)
 
 #
 # Add dlsh itself to dlsh.zip
