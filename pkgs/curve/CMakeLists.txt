@@ -25,7 +25,7 @@ else()
     set(LIBDL dl)
 endif()
 
-include_directories(${TCL_INCLUDE_DIR} .)
+include_directories(${TCL_INCLUDE_DIR} ${PROJECT_SOURCE_DIR})
 
 ###############################
 # curve

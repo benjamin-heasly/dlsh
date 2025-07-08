@@ -34,3 +34,7 @@
 	path = deps/yajl-tcl
 	url = https://github.com/flightaware/yajl-tcl.git
     ignore = untracked
+[submodule "deps/box2d"]
+	path = deps/box2d
+	url = https://github.com/erincatto/box2d.git
+    ignore = untracked

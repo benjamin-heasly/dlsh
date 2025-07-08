@@ -12,7 +12,7 @@ if(WIN32)
 elseif(APPLE)
 	add_definitions(-fPIC -DMACOS -Dunix -DLINUX)
 	include_directories(/usr/local/include)
-	link_directories(/usr/local/lib)
+    link_directories(/usr/local/lib /opt/homebrew/lib)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "QNX")
 	include_directories(../local/include)
 	link_directories(../local/aarch64/lib)
@@ -24,7 +24,7 @@ else()
 	set(TCLLIB tclstub)
 endif()
 
-include_directories(${TCL_INCLUDE_DIR} .)
+include_directories(${TCL_INCLUDE_DIR} ${PROJECT_SOURCE_DIR})
 
 ###############################
 # tclbox2d
@@ -46,3 +46,5 @@ endif()
 
 target_link_libraries(tclbox2d ${TCLLIB} box2d)
 
+install(TARGETS tclbox2d LIBRARY DESTINATION lib/box2d/${TCL_OS}/${TCL_MACHINE} COMPONENT dlsh-zip)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/ DESTINATION lib/box2d COMPONENT dlsh-zip FILES_MATCHING PATTERN *.tcl)
