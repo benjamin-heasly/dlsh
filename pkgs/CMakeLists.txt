@@ -112,6 +112,7 @@ endif()
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/bink)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/curve)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/tclbox2d)
+add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/dbscan)
 
 include(CPack)
 cpack_add_component(dlsh-zip)
