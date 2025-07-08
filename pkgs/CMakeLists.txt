@@ -110,6 +110,7 @@ else()
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/bink)
+add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/curve)
 
 include(CPack)
 cpack_add_component(dlsh-zip)
