@@ -32,16 +32,12 @@ endif()
 #
 
 # tcllib and tklib use a standard configure/make pattern.
-set(TCLLIB_VERSION "tcllib-2-0")
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TCLLIB_VERSION} https://github.com/tcltk/tcllib.git)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tcllib COMMAND ./configure --prefix=${CMAKE_INSTALL_PREFIX})"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tcllib COMMAND make install-libraries)"
     COMPONENT dlsh-zip
 )
-set(TKLIB_VERSION "tklib-0.9")
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TKLIB_VERSION} https://github.com/tcltk/tklib.git)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tklib COMMAND ./configure --prefix=${CMAKE_INSTALL_PREFIX})"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/tklib COMMAND make install-libraries)"
     COMPONENT dlsh-zip
@@ -51,21 +47,22 @@ install(
 # We can run configure/make to produce the pkgIndex.tcl we need.
 # Annoyingly, configure fails without tk-dev installed.
 # And we still have to manually copy the files we need!
-set(TKCON_VERSION "tkcon-2-8")
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${TKCON_VERSION} https://github.com/bohagan1/TkCon.git)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/TkCon COMMAND ./configure && make)"
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib COMMAND mkdir -p ${TKCON_VERSION})"
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${TKCON_VERSION} COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/pkgIndex.tcl .)"
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${TKCON_VERSION} COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/tkcon.tcl .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/TkCon COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/pkgIndex.tcl .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/TkCon COMMAND cp ${CMAKE_SOURCE_DIR}/deps/TkCon/tkcon.tcl .)"
     COMPONENT dlsh-zip
 )
 
-# bwidget is just tcl files that we copy -- and we don't need the .git history.
-set(BWIDGET_VERSION "bwidget-1-10-1")
+# bwidget is just tcl files that we copy.
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib COMMAND git clone --depth 1 --branch ${BWIDGET_VERSION} https://github.com/tcltk/bwidget ${BWIDGET_VERSION})"
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/${BWIDGET_VERSION} COMMAND rm -rf .git/)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp ${CMAKE_SOURCE_DIR}/deps/bwidget/*.tcl .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp ${CMAKE_SOURCE_DIR}/deps/bwidget/*.txt .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp -r ${CMAKE_SOURCE_DIR}/deps/bwidget/demo .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp -r ${CMAKE_SOURCE_DIR}/deps/bwidget/images .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp -r ${CMAKE_SOURCE_DIR}/deps/bwidget/lang .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp -r ${CMAKE_SOURCE_DIR}/deps/bwidget/tests .)"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib/bwidget COMMAND cp -r ${CMAKE_SOURCE_DIR}/deps/bwidget/BWman .)"
     COMPONENT dlsh-zip
 )
 
@@ -73,17 +70,13 @@ install(
 # Add external tcl-plus-c packages to dlsh.zip.
 #
 
-set(SQLITE_VERSION "version-3.50.2")
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${SQLITE_VERSION} https://github.com/sqlite/sqlite.git)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/sqlite COMMAND ./configure --enable-all)"
     CODE "set(ENV{TCLLIBPATH} ${CMAKE_INSTALL_PREFIX}/lib)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/sqlite COMMAND make tclextension-install)"
     COMPONENT dlsh-zip
 )
-set(YAJLTCL_VERSION "v1.8.1")
 install(
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps COMMAND git clone --depth 1 --branch ${YAJLTCL_VERSION} https://github.com/flightaware/yajl-tcl.git)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND autoconf)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND ./configure --exec_prefix=${CMAKE_INSTALL_PREFIX})"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND make)"

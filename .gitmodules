@@ -7,3 +7,21 @@
 [submodule "deps/libharu"]
 	path = deps/libharu
 	url = https://github.com/libharu/libharu.git
+[submodule "deps/tcllib"]
+	path = deps/tcllib
+	url = https://github.com/tcltk/tcllib.git
+[submodule "deps/tklib"]
+	path = deps/tklib
+	url = https://github.com/tcltk/tklib.git
+[submodule "deps/TkCon"]
+	path = deps/TkCon
+	url = https://github.com/bohagan1/TkCon.git
+[submodule "deps/bwidget"]
+	path = deps/bwidget
+	url = https://github.com/tcltk/bwidget
+[submodule "deps/sqlite"]
+	path = deps/sqlite
+	url = https://github.com/sqlite/sqlite.git
+[submodule "deps/yajl-tcl"]
+	path = deps/yajl-tcl
+	url = https://github.com/flightaware/yajl-tcl.git
