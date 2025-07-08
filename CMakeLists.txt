@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
 add_subdirectory( libdg )
-add_subdirectory( pkgs )
 
 if(NOT DEFINED PROJECT_VERSION)
   set(PROJECT_VERSION 0.0.0)
@@ -86,10 +85,11 @@ set(CPACK_PACKAGE_NAME dlsh)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Dynamic Lists and other TCL utilities.")
 set(CPACK_PACKAGE_CONTACT SheinbergLab)
 
+add_subdirectory( pkgs )
+
 set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
 install(TARGETS dlsh PUBLIC_HEADER COMPONENT dlsh)
 install(TARGETS dlsh LIBRARY COMPONENT dlsh)
-
 
 include(InstallRequiredSystemLibraries)
 

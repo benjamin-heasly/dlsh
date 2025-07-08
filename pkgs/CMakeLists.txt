@@ -114,5 +114,15 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/curve)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/tclbox2d)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/dbscan)
 
+#
+# Add dlsh itself to dlsh.zip
+#
+install(TARGETS dlsh LIBRARY DESTINATION lib/dlsh/${TCL_OS}/${TCL_MACHINE} COMPONENT dlsh-zip)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION lib/dlsh COMPONENT dlsh-zip FILES_MATCHING PATTERN *.tcl PATTERN "**/local" EXCLUDE)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/bin DESTINATION lib/dlsh COMPONENT dlsh-zip FILES_MATCHING PATTERN *.tcl)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/examples DESTINATION lib/dlsh COMPONENT dlsh-zip)
+install(FILES ${CMAKE_SOURCE_DIR}/lib/dlshrc DESTINATION lib/dlsh COMPONENT dlsh-zip)
+install(FILES ${CMAKE_SOURCE_DIR}/lib/tclIndex DESTINATION lib/dlsh COMPONENT dlsh-zip)
+
 include(CPack)
 cpack_add_component(dlsh-zip)
