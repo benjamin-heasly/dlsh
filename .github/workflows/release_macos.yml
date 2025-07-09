@@ -17,10 +17,10 @@ jobs:
 
     steps:
 
-      - name: Install cmake build tool and dependencies lz4 and tcl9.0.
+      - name: Install cmake build tool and dependencies.
         run: |
           brew update
-          brew install cmake lz4 tcl-tk@9 libpq
+          brew install cmake lz4 tcl-tk@9 libpq postgresql@17
 
       - name: Check out our code
         uses: actions/checkout@v4
