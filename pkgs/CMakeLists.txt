@@ -109,6 +109,28 @@ else()
     endif()
 endif()
 
+if(APPLE)
+    if(DEFINED "CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM")
+        # Configure for apple code signing, notarization, and gatekeeper/entitlements.
+        set(CMAKE_XCODE_ATTRIBUTE_OTHER_CODE_SIGN_FLAGS "--strict --timestamp --options=runtime")
+        set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_INJECT_BASE_ENTITLEMENTS "NO")
+        set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Developer ID Application")
+        set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual")
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
+        set(CMAKE_SKIP_RPATH TRUE)
+
+        # Sign external tcl-plus-c package binaries.
+        set(CODESIGN_COMMAND /usr/bin/codesign --force --verify ${CMAKE_XCODE_ATTRIBUTE_OTHER_CODE_SIGN_FLAGS} --sign)
+        install(
+            CODE "file(GLOB SQLITE_DYLIB ${CMAKE_INSTALL_PREFIX}/lib/sqlite*/*.dylib)"
+            CODE "execute_process(COMMAND ${CODESIGN_COMMAND} \"${CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY}\" \$\{SQLITE_DYLIB\})"
+            CODE "file(GLOB YAJLTCL_DYLIB ${CMAKE_INSTALL_PREFIX}/lib/yajltcl*/*.dylib)"
+            CODE "execute_process(COMMAND ${CODESIGN_COMMAND} \"${CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY}\" \$\{YAJLTCL_DYLIB\})"
+            COMPONENT dlsh-zip
+        )
+    endif()
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/bink)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/curve)
 add_subdirectory(${CMAKE_SOURCE_DIR}/pkgs/tclbox2d)

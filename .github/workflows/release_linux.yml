@@ -79,11 +79,11 @@ jobs:
 
       - name: Build dlsh and package for release.
         run: |
-          cmake -D PROJECT_VERSION=${{ github.ref_name }} -B build -D CPACK_DEB_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="dlsh;dg" -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies
+          cmake -B build -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies -D CPACK_DEB_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="dlsh;dg"
           cmake --build build
           cpack -G DEB --config build/CPackConfig.cmake
 
-          cmake -B build -D CMAKE_INSTALL_PREFIX=build/dlsh-zip -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies
+          cmake -B build -D PROJECT_VERSION=${{ github.ref_name }} -D DLSH_DEPENDENCIES=${{ github.workspace }}/deps/dlsh-dependencies -D CMAKE_INSTALL_PREFIX=build/dlsh-zip
           cmake --install build --component dlsh-zip
           cd build/dlsh-zip/
           zip -r dlsh-${{ github.ref_name }}-Linux-$(dpkg --print-architecture).zip lib/
