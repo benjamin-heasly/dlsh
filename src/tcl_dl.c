@@ -50,6 +50,7 @@ extern json_t *dg_to_json(DYN_GROUP *dg);
 extern json_t *dg_element_to_json(DYN_GROUP *dg, int element);
 extern json_t *dl_to_json(DYN_LIST *dl);
 extern json_t *dl_element_to_json(DYN_LIST *dl, int element);
+extern json_t *dg_to_hybrid_json(DYN_GROUP *dg);
 
 /*
  * Callback function for deleted temporary lists 
@@ -158,7 +159,7 @@ enum DL_SCANNERS      { DL_SCAN_INT, DL_SCAN_FLOAT, DL_SCAN_BINARY,
 			DL_SCAN_OCTAL, DL_SCAN_HEX };
 
 enum DG_DELETERS     { DG_DELETE_NORMAL, DG_DELETE_TEMPS };
-enum DG_TOFROMSTRING { DG_TOFROM_BINARY, DG_TOFROM_BASE64, DG_TOFROM_JSON };
+enum DG_TOFROMSTRING { DG_TOFROM_BINARY, DG_TOFROM_BASE64, DG_TOFROM_JSON, DG_TOFROM_JSON_HYBRID };
 enum DL_TOFROMSTRING { DL_TOFROM_BINARY, DL_TOFROM_BASE64, DL_TOFROM_JSON };
 /*****************************************************************************
  *                           TCL Bound Functions 
@@ -869,6 +870,8 @@ int Dl_Init(Tcl_Interp *interp)
 		       (ClientData) DG_TOFROM_JSON, NULL);
   Tcl_CreateObjCommand(interp, "dg_json", tclDynGroupToString, 
 		       (ClientData) DG_TOFROM_JSON, NULL);
+  Tcl_CreateObjCommand(interp, "dg_toHybridJSON", tclDynGroupToString, 
+		       (ClientData) DG_TOFROM_JSON_HYBRID, NULL);
   Tcl_CreateObjCommand(interp, "dl_toString", tclDynListToString, 
 		       (ClientData) DL_TOFROM_BINARY, NULL);
   Tcl_CreateObjCommand(interp, "dl_toString64", tclDynListToString, 
@@ -1630,6 +1633,9 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
 	return TCL_ERROR;
     }
   }
+  else if ((Tcl_Size) data == DG_TOFROM_JSON_HYBRID) {
+
+  }
   else if (objc != 3) {
     Tcl_WrongNumArgs(interp, 1, objv, "dyngroup varname");
     return TCL_ERROR;
@@ -1654,6 +1660,25 @@ static int tclDynGroupToString(ClientData data, Tcl_Interp * interp, int objc,
     json_decref(json);
     if (!json_str) {
       Tcl_AppendResult(interp, "dg_toJSON: error dumping json string", NULL);
+      return TCL_ERROR;
+    }
+    Tcl_SetResult(interp, json_str, TCL_VOLATILE);
+    free(json_str);
+    return TCL_OK;
+  }
+
+  /* create a row oriented json string representation with arrays info following */
+  if ((Tcl_Size) data == DG_TOFROM_JSON_HYBRID) {
+    json = dg_to_hybrid_json(dg);
+
+    if (!json) {
+      Tcl_AppendResult(interp, "dg_toHybridJSON: error creating json object", NULL);
+      return TCL_ERROR;
+    }
+    json_str = json_dumps(json, json_flags);
+    json_decref(json);
+    if (!json_str) {
+      Tcl_AppendResult(interp, "dg_toHybridJSON: error dumping json string", NULL);
       return TCL_ERROR;
     }
     Tcl_SetResult(interp, json_str, TCL_VOLATILE);
