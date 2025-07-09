@@ -11,7 +11,7 @@ if(WIN32)
     link_directories(c:/usr/local/lib)
 else(APPLE)
     add_definitions(-fPIC)
-    include_directories(../../src ../../src/lablib)
+    include_directories(../../src ../../src/lablib /usr/local/include /opt/homebrew/include/ /opt/homebrew/include/tcl-tk)
     link_directories(../../build /usr/local/lib /opt/homebrew/lib)
 endif()
 
