@@ -113,16 +113,13 @@ jobs:
           cmake --install build --component dlsh-zip
 
           cd build/dlsh-zip/
-          mkdir dlsh
-          zip -r dlsh/dlsh-${{ github.ref_name }}-Darwin-$(uname -m).zip lib/
-          hdiutil create -format UDZO -srcfolder dlsh dlsh-zip-${{ github.ref_name }}-Darwin-$(uname -m).dmg
-          xcrun notarytool submit dlsh-zip-${{ github.ref_name }}-Darwin-$(uname -m).dmg --keychain-profile "dlsh-signing" --wait
-          xcrun stapler staple dlsh-zip-${{ github.ref_name }}-Darwin-$(uname -m).dmg
+          zip -r dlsh-${{ github.ref_name }}-Darwin-$(uname -m).zip lib/
+          xcrun notarytool submit dlsh-${{ github.ref_name }}-Darwin-$(uname -m).zip --keychain-profile "dlsh-signing" --wait
 
       - name: Create a GitHub release for the current tag and package.
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "./*-signed.pkg, ./build/dlsh-zip/*.dmg"
+          artifacts: "./*-signed.pkg, ./build/dlsh-zip/*.zip"
           body: libs, headers and dependencies for dlsh version ${{ github.ref_name }}
           generateReleaseNotes: true
           allowUpdates: true
