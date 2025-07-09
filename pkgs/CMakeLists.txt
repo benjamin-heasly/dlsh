@@ -82,7 +82,7 @@ if(APPLE)
 endif()
 install(
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND autoconf)"
-    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND ./configure --exec_prefix=${CMAKE_INSTALL_PREFIX} ${WITH_TCL}"
+    CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND ./configure --exec_prefix=${CMAKE_INSTALL_PREFIX} ${WITH_TCL})"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND make)"
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND make install)"
     COMPONENT dlsh-zip
