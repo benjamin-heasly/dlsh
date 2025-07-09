@@ -181,3 +181,85 @@ json_t *dg_element_to_json(DYN_GROUP *dg, int row)
   
   return json_dg;
 }
+
+json_t *dg_to_hybrid_json(DYN_GROUP *dg)
+{
+  int i, j, max_rows = 0;
+  json_t *rows_array, *array_refs, *result;
+  
+  if (!dg || DYN_GROUP_NLISTS(dg) == 0) return NULL;
+  
+  // Find max rows across all lists
+  for (i = 0; i < DYN_GROUP_NLISTS(dg); i++) {
+    DYN_LIST *dl = DYN_GROUP_LIST(dg, i);
+    if (dl && DYN_LIST_N(dl) > max_rows) {
+      max_rows = DYN_LIST_N(dl);
+    }
+  }
+  
+  // Create array lookup table (columnar format for nested arrays)
+  array_refs = json_object();
+  if (!array_refs) return NULL;
+  
+  for (i = 0; i < DYN_GROUP_NLISTS(dg); i++) {
+    DYN_LIST *dl = DYN_GROUP_LIST(dg, i);
+    if (dl && DYN_LIST_DATATYPE(dl) == DF_LIST) {
+      json_t *array_data = dl_to_json(dl);
+      if (array_data) {
+        json_object_set_new(array_refs, DYN_LIST_NAME(dl), array_data);
+      }
+    }
+  }
+  
+  // Create row array
+  rows_array = json_array();
+  if (!rows_array) {
+    json_decref(array_refs);
+    return NULL;
+  }
+  
+  for (i = 0; i < max_rows; i++) {
+    json_t *row = json_object();
+    if (!row) {
+      json_decref(array_refs);
+      json_decref(rows_array);
+      return NULL;
+    }
+    
+    // Add fields to each row
+    for (j = 0; j < DYN_GROUP_NLISTS(dg); j++) {
+      DYN_LIST *dl = DYN_GROUP_LIST(dg, j);
+      if (!dl) continue;
+      
+      const char *name = DYN_LIST_NAME(dl);
+      
+      if (DYN_LIST_DATATYPE(dl) == DF_LIST) {
+        // For nested arrays, store reference index
+        json_object_set_new(row, name, json_integer(i));
+      } else {
+        // For primitives, include the actual value
+        json_t *element = dl_element_to_json(dl, i);
+        if (element) {
+          json_object_set_new(row, name, element);
+        } else {
+          json_object_set_new(row, name, json_null());
+        }
+      }
+    }
+    
+    json_array_append_new(rows_array, row);
+  }
+  
+  // Create hybrid structure
+  result = json_object();
+  if (!result) {
+    json_decref(array_refs);
+    json_decref(rows_array);
+    return NULL;
+  }
+  
+  json_object_set_new(result, "rows", rows_array);
+  json_object_set_new(result, "arrays", array_refs);
+  
+  return result;
+}
