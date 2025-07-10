@@ -114,7 +114,6 @@ elseif(APPLE)
     endif()
 else()
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS dlsh-dg)
 endif()
 
 include(CPack)
