@@ -78,7 +78,7 @@ install(
 )
 if(APPLE)
     # Use the homebrew installation of tcl 9.
-    set(WITH_TCL "--with-tcl=/opt/homebrew/lib/tclConfig.sh")
+    set(WITH_TCL "--with-tcl=/opt/homebrew/lib")
 endif()
 install(
     CODE "execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/yajl-tcl COMMAND autoconf)"
